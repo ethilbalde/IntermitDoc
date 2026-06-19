@@ -1,0 +1,58 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history for changelog
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build exe
+        run: python -m PyInstaller pdf_classifier.spec --noconfirm
+
+      - name: Generate changelog
+        id: changelog
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $prev = git describe --tags --abbrev=0 "$tag^" 2>$null
+          if ($prev) {
+            $log = git log "$prev..$tag" --pretty=format:"- %s" --no-merges
+          } else {
+            $log = git log "$tag" --pretty=format:"- %s" --no-merges
+          }
+          $body = "## Changements`n`n$log"
+          # Write to file to avoid multiline issues
+          $body | Out-File -FilePath changelog_body.md -Encoding utf8
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "IntermitDoc ${{ github.ref_name }}"
+          body_path: changelog_body.md
+          files: dist/IntermitDoc/IntermitDoc.exe
+          draft: false
+          prerelease: false

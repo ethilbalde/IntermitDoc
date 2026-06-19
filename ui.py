@@ -18,6 +18,9 @@ try:
 except ImportError:
     DND_DISPONIBLE = False
 
+from version import __version__
+import updater
+
 from config import (
     TYPES_DOCUMENTS, MOIS_DOSSIERS, IA_PROVIDERS,
     charger_config, sauvegarder_config, valider_config,
@@ -5576,8 +5579,17 @@ class FenetrePrincipale(TkinterDnD.Tk if DND_DISPONIBLE else tk.Tk):
         menu_theme.add_command(label="◑ Medium", command=lambda: self._changer_theme("medium"))
         menu_theme.add_command(label="● Sombre", command=lambda: self._changer_theme("sombre"))
 
+        menu_aide = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Aide", menu=menu_aide)
+        menu_aide.add_command(label=f"Version {__version__}", state="disabled")
+        menu_aide.add_separator()
+        menu_aide.add_command(label="Vérifier les mises à jour...", command=self._ouvrir_mises_a_jour)
+
     def _changer_theme(self, nom: str) -> None:
         TH.appliquer_theme(self, nom)
+
+    def _ouvrir_mises_a_jour(self):
+        FenetreMisesAJour(self)
 
     def _construire_interface(self):
         self.notebook = ttk.Notebook(self)
@@ -6250,3 +6262,131 @@ class FenetrePrincipale(TkinterDnD.Tk if DND_DISPONIBLE else tk.Tk):
     def _quitter(self):
         self._en_traitement = False
         self.destroy()
+
+
+# ---------------------------------------------------------------------------
+# Fenêtre "Mises à jour"
+# ---------------------------------------------------------------------------
+class FenetreMisesAJour(tk.Toplevel):
+    """Dialog to check for and apply updates from GitHub Releases."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("Mises à jour — IntermitDoc")
+        self.resizable(False, False)
+        self.grab_set()
+
+        self._release_info = None
+        self._bat_path = None
+
+        pad = {"padx": 16, "pady": 8}
+
+        # Version actuelle
+        frm_ver = tk.Frame(self)
+        frm_ver.pack(fill=tk.X, **pad)
+        tk.Label(frm_ver, text="Version installée :", font=("", 10)).pack(side=tk.LEFT)
+        tk.Label(frm_ver, text=__version__, font=("", 10, "bold")).pack(side=tk.LEFT, padx=6)
+
+        # Version disponible
+        frm_dispo = tk.Frame(self)
+        frm_dispo.pack(fill=tk.X, padx=16, pady=(0, 4))
+        tk.Label(frm_dispo, text="Version disponible :").pack(side=tk.LEFT)
+        self._lbl_dispo = tk.Label(frm_dispo, text="—", font=("", 10, "bold"))
+        self._lbl_dispo.pack(side=tk.LEFT, padx=6)
+
+        # Notes de version
+        self._txt_notes = scrolledtext.ScrolledText(
+            self, height=8, width=52, state="disabled", wrap=tk.WORD
+        )
+        self._txt_notes.pack(padx=16, pady=4)
+
+        # Barre de progression
+        self._progress = ttk.Progressbar(self, length=380, mode="determinate")
+        self._progress.pack(padx=16, pady=(4, 0))
+        self._lbl_status = tk.Label(self, text="")
+        self._lbl_status.pack(padx=16, pady=(2, 8))
+
+        # Boutons
+        frm_btn = tk.Frame(self)
+        frm_btn.pack(pady=(0, 12))
+        self._btn_check = ttk.Button(frm_btn, text="Vérifier",    command=self._verifier)
+        self._btn_check.pack(side=tk.LEFT, padx=6)
+        self._btn_update = ttk.Button(frm_btn, text="Mettre à jour", command=self._mettre_a_jour, state="disabled")
+        self._btn_update.pack(side=tk.LEFT, padx=6)
+        ttk.Button(frm_btn, text="Fermer", command=self.destroy).pack(side=tk.LEFT, padx=6)
+
+        self._centrer()
+        # Lancer la vérification automatiquement
+        self.after(100, self._verifier)
+
+    def _centrer(self):
+        self.update_idletasks()
+        x = self.master.winfo_x() + (self.master.winfo_width()  - self.winfo_width())  // 2
+        y = self.master.winfo_y() + (self.master.winfo_height() - self.winfo_height()) // 2
+        self.geometry(f"+{x}+{y}")
+
+    def _verifier(self):
+        self._btn_check.config(state="disabled")
+        self._lbl_status.config(text="Vérification en cours…")
+        threading.Thread(target=self._check_thread, daemon=True).start()
+
+    def _check_thread(self):
+        try:
+            info = updater.check_for_update()
+            self.after(0, self._on_check_done, info, None)
+        except Exception as exc:
+            self.after(0, self._on_check_done, None, str(exc))
+
+    def _on_check_done(self, info, error):
+        self._btn_check.config(state="normal")
+        if error:
+            self._lbl_status.config(text=f"Erreur : {error}")
+            return
+        if info is None:
+            self._lbl_dispo.config(text=__version__)
+            self._lbl_status.config(text="Vous avez la dernière version.")
+            return
+        self._release_info = info
+        self._lbl_dispo.config(text=info["version"])
+        self._lbl_status.config(text="Mise à jour disponible !")
+        self._btn_update.config(state="normal" if info["url"] else "disabled")
+        notes = info.get("notes", "") or "Aucune note de version."
+        self._txt_notes.config(state="normal")
+        self._txt_notes.delete("1.0", tk.END)
+        self._txt_notes.insert(tk.END, notes)
+        self._txt_notes.config(state="disabled")
+
+    def _mettre_a_jour(self):
+        if not self._release_info or not self._release_info.get("url"):
+            return
+        self._btn_update.config(state="disabled")
+        self._btn_check.config(state="disabled")
+        self._lbl_status.config(text="Téléchargement…")
+        self._progress["value"] = 0
+        updater.download_and_apply(
+            url=self._release_info["url"],
+            progress_cb=self._on_progress,
+            done_cb=self._on_done,
+            error_cb=self._on_error,
+        )
+
+    def _on_progress(self, ratio: float):
+        self.after(0, lambda: self._progress.config(value=int(ratio * 100)))
+
+    def _on_done(self, bat_path: str):
+        self._bat_path = bat_path
+        self.after(0, self._proposer_redemarrage)
+
+    def _on_error(self, msg: str):
+        self.after(0, lambda: self._lbl_status.config(text=f"Erreur : {msg}"))
+        self.after(0, lambda: self._btn_update.config(state="normal"))
+
+    def _proposer_redemarrage(self):
+        self._lbl_status.config(text="Téléchargement terminé.")
+        ok = messagebox.askyesno(
+            "Redémarrer",
+            "La mise à jour est prête.\n\nL'application va se fermer et redémarrer automatiquement.\n\nContinuer ?",
+            parent=self,
+        )
+        if ok:
+            updater.launch_updater_and_exit(self._bat_path)
