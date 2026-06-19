@@ -100,7 +100,13 @@ D:\document pro\intermitent\
 - Le dossier de destination est TOUJOURS `dossier_base/annee/mois/TYPE/` — jamais le dossier parent du fichier source
 - Après toute modification de logique métier : lancer `python -m pytest tests/ -v`
 
-## Pièges connus
+## Dépendances
+
+- Toujours ajouter un nouveau package à `requirements.txt` immédiatement après `pip install`
+- Le `.spec` PyInstaller référence les packages via `collect_all()` — vérifier qu'il est à jour aussi
+- Si un widget Tkinter tombe en fallback silencieux, vérifier d'abord si son package est installé (`python -c "import X"`)
+
+## Dépendances
 
 - `Path.rename()` sur Windows lève `FileExistsError` si la destination existe (contrairement à Linux)
 - `rglob("[AEM]*.pdf")` traite `[AEM]` comme une classe de caractères — utiliser `os.walk()` avec comparaison exacte
