@@ -1,0 +1,45 @@
+# User config (contains API keys)
+config.json
+
+# Build artifacts
+dist/
+build/
+*.spec.bak
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtual envs
+venv/
+.venv/
+env/
+
+# Logs
+*.log
+intermitdoc.log
+
+# User data (personal, stored in %APPDATA%)
+employeurs.json
+traites.json
+previsionnels.json
+
+# Debug images
+debug_*.png
+aem_preview.png
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# MCP / temp
+perplexity-mcp/
+crop_tool.html
+recuperer_fichiers.py
