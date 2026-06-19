@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
 Fichier de configuration PyInstaller pour IntermitDoc.
-Exécuter : python -m PyInstaller pdf_classifier.spec
+Exécuter : python -m PyInstaller intermitdoc.spec
 """
 from PyInstaller.utils.hooks import collect_all, collect_data_files
 
@@ -62,7 +62,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,          # pas de fenêtre console noire
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

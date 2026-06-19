@@ -1,5 +1,5 @@
 @echo off
-cd /d "E:\claude programe\PDF Classifier"
+cd /d "E:\claude programe\IntermitDoc"
 
 echo Fermeture de IntermitDoc si ouvert...
 taskkill /f /im IntermitDoc.exe >nul 2>&1
@@ -24,7 +24,7 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo Compilation en cours ^(2-3 minutes^)...
-python -m PyInstaller pdf_classifier.spec --noconfirm > build_log.txt 2>&1
+python -m PyInstaller intermitdoc.spec --noconfirm > build_log.txt 2>&1
 echo.
 if %ERRORLEVEL% EQU 0 (
     echo BUILD OK -- dist\IntermitDoc\IntermitDoc.exe

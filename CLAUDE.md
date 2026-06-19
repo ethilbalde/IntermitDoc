@@ -6,7 +6,7 @@ Application Python/Tkinter de classification de PDF pour intermittents du specta
 
 - Lancer en dev : `python main.py`
 - Lancer les tests : `python -m pytest tests/ -v`
-- Compiler l'exe : `python -m PyInstaller pdf_classifier.spec --noconfirm`
+- Compiler l'exe : `python -m PyInstaller intermitdoc.spec --noconfirm`
 - Exe généré : `dist\IntermitDoc\IntermitDoc.exe`
 - Logs runtime : `%APPDATA%\IntermitDoc\intermitdoc.log`
 - Config/données : `%APPDATA%\IntermitDoc\` (config.json, employeurs.json, traites.json, previsionnels.json)

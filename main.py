@@ -1,5 +1,5 @@
 """
-Point d'entrée du PDF Classifier.
+Point d'entrée d'IntermitDoc.
 """
 import sys
 from pathlib import Path

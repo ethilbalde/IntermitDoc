@@ -30,7 +30,7 @@ jobs:
           pip install pyinstaller
 
       - name: Build exe
-        run: python -m PyInstaller pdf_classifier.spec --noconfirm
+        run: python -m PyInstaller intermitdoc.spec --noconfirm
 
       - name: Generate changelog
         id: changelog

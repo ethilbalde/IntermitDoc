@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Interface graphique principale du PDF Classifier.
+Interface graphique principale d'IntermitDoc.
 """
 import io
 import re

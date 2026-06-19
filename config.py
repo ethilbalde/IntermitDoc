@@ -1,5 +1,5 @@
 """
-Configuration du PDF Classifier.
+Configuration d'IntermitDoc.
 Gestion de la persistance des paramètres via config.json.
 """
 import json
