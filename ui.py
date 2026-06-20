@@ -41,6 +41,7 @@ from classifier import (
     copier_page_classifiee,
     creer_structure_dossiers,
     lire_metadata_intermitdoc,
+    _injecter_metadata,
 )
 
 import theme as TH
@@ -4012,45 +4013,21 @@ class OngletHistorique(tk.Frame):
             self._lbl_status.config(text="⚠ Fichier introuvable.", fg="red")
             return
         try:
-            import fitz
-            doc  = fitz.open(chemin)
-            meta = doc.metadata or {}
-            type_doc = info.get("type", "")
-            annee    = info.get("annee", "")
-            mois     = info.get("mois", "")
-            doc.set_metadata({
-                "author":   meta.get("author", ""),
-                "title":    meta.get("title", ""),
-                "creator":  meta.get("creator", ""),
-                "producer": meta.get("producer", ""),
-                "subject":  f"IntermitDoc:{type_doc}:{annee}-{mois}",
-                "keywords": (
-                    f"IntermitDoc type={type_doc} annee={annee} mois={mois} "
-                    f"employeur={info.get('employeur','')} "
-                    f"heures={info.get('heures','')} "
-                    f"salaire={info.get('salaire','')} "
-                    f"date_debut={info.get('date_debut','')} "
-                    f"date_fin={info.get('date_fin','')} "
-                    f"traite={str(_date_today.today())}"
-                ),
-            })
-            # Reconstruire le nom de fichier
-            info_clf = {
-                "type":       type_doc,
-                "annee":      annee,
-                "mois":       mois,
-                "employeur":  info.get("employeur", ""),
-                "date_debut": info.get("date_debut", ""),
-                "date_fin":   info.get("date_fin", ""),
-                "heures":     info.get("heures", ""),
-                "salaire_brut": info.get("salaire", ""),
-            }
-            nouveau_nom = construire_nom_fichier(info_clf)
             chemin_path = Path(chemin)
+            # Normalise salaire key: ui uses 'salaire', classifier uses 'salaire_brut'
+            info_clf = {
+                "type":        info.get("type", ""),
+                "annee":       info.get("annee", ""),
+                "mois":        info.get("mois", ""),
+                "employeur":   info.get("employeur", ""),
+                "date_debut":  info.get("date_debut", ""),
+                "date_fin":    info.get("date_fin", ""),
+                "heures":      info.get("heures", ""),
+                "salaire_brut": info.get("salaire_brut") or info.get("salaire", ""),
+            }
+            pdf_bytes = _injecter_metadata(chemin_path.read_bytes(), info_clf)
+            nouveau_nom = construire_nom_fichier(info_clf)
             chemin_dest = chemin_path.parent / nouveau_nom
-
-            pdf_bytes = doc.tobytes(deflate=True)
-            doc.close()
 
             if chemin_dest != chemin_path and chemin_dest.exists():
                 self._lbl_status.config(
