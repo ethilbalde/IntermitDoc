@@ -5578,9 +5578,14 @@ class FenetrePrincipale(TkinterDnD.Tk if DND_DISPONIBLE else tk.Tk):
 
         menu_theme = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="🎨 Thème", menu=menu_theme)
-        menu_theme.add_command(label="☀ Clair",  command=lambda: self._changer_theme("clair"))
-        menu_theme.add_command(label="◑ Medium", command=lambda: self._changer_theme("medium"))
-        menu_theme.add_command(label="● Sombre", command=lambda: self._changer_theme("sombre"))
+        menu_theme.add_command(label="☀ Clair",       command=lambda: self._changer_theme("clair"))
+        menu_theme.add_command(label="◑ Medium",      command=lambda: self._changer_theme("medium"))
+        menu_theme.add_command(label="● Sombre",      command=lambda: self._changer_theme("sombre"))
+        menu_theme.add_separator()
+        menu_theme.add_command(label="🍷 Bourgogne",  command=lambda: self._changer_theme("bourgogne"))
+        menu_theme.add_command(label="💜 Violet",     command=lambda: self._changer_theme("violet"))
+        menu_theme.add_command(label="🎃 Citrouille", command=lambda: self._changer_theme("citrouille"))
+        menu_theme.add_command(label="🌊 Océan",      command=lambda: self._changer_theme("ocean"))
 
         menu_aide = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Aide", menu=menu_aide)

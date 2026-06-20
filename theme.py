@@ -51,6 +51,55 @@ _PALETTES: dict[str, dict] = {
         "BTN_HOVER":      "#5E5E5E",
         "SV_TTK_THEME":   "dark",
     },
+    # --- Color combos from @design.deb ---
+    "bourgogne": {                         # Deep Burgundy + Golden Sand
+        "SURFACE":        "#3D0A0E",
+        "SURFACE_SUBTLE": "#5B0E14",
+        "BORDER":         "#7A2020",
+        "TEXT_PRIMARY":   "#F1E194",
+        "TEXT_SECONDARY": "#D4C060",
+        "TEXT_MUTED":     "#988840",
+        "TEXT_DISABLED":  "#685E30",
+        "BTN_SURFACE":    "#6A1515",
+        "BTN_HOVER":      "#821C1C",
+        "SV_TTK_THEME":   "dark",
+    },
+    "violet": {                            # Lemon Chiffon + Ultra Violet
+        "SURFACE":        "#FEFACD",
+        "SURFACE_SUBTLE": "#F0EAA8",
+        "BORDER":         "#C8BA50",
+        "TEXT_PRIMARY":   "#3D2D6B",
+        "TEXT_SECONDARY": "#5F4A8B",
+        "TEXT_MUTED":     "#8070A8",
+        "TEXT_DISABLED":  "#A898C0",
+        "BTN_SURFACE":    "#E0D478",
+        "BTN_HOVER":      "#CCBC58",
+        "SV_TTK_THEME":   "light",
+    },
+    "citrouille": {                        # Pumpkin + Charcoal
+        "SURFACE":        "#1A2E3A",
+        "SURFACE_SUBTLE": "#233D4C",
+        "BORDER":         "#3A5568",
+        "TEXT_PRIMARY":   "#FDEEE0",
+        "TEXT_SECONDARY": "#FDB07E",
+        "TEXT_MUTED":     "#8AAABB",
+        "TEXT_DISABLED":  "#4A6070",
+        "BTN_SURFACE":    "#FD802E",
+        "BTN_HOVER":      "#E87020",
+        "SV_TTK_THEME":   "dark",
+    },
+    "ocean": {                             # Cloudy Sky + Ocean Blue
+        "SURFACE":        "#CBDDE9",
+        "SURFACE_SUBTLE": "#B8CDD8",
+        "BORDER":         "#90B0C8",
+        "TEXT_PRIMARY":   "#183048",
+        "TEXT_SECONDARY": "#2872A1",
+        "TEXT_MUTED":     "#5898B8",
+        "TEXT_DISABLED":  "#90B0C8",
+        "BTN_SURFACE":    "#A8C8D8",
+        "BTN_HOVER":      "#90B8CC",
+        "SV_TTK_THEME":   "light",
+    },
 }
 
 _THEME_COURANT = "clair"
@@ -261,7 +310,8 @@ def _recolorer_widgets(widget: tk.Misc, p: dict) -> None:
         try:
             # Preserve explicitly set foreground colors (e.g. colored status labels)
             current_fg = widget.cget("fg")
-            if current_fg in ("#212121", "#1A1A1A", "#E8E8E8", "#FFFFFF"):
+            _text_tokens = {p["TEXT_PRIMARY"] for p in _PALETTES.values()}
+            if current_fg in _text_tokens:
                 widget.configure(fg=text)
             widget.configure(bg=surf)
         except tk.TclError:
@@ -274,7 +324,9 @@ def _recolorer_widgets(widget: tk.Misc, p: dict) -> None:
     elif cls == "Button":
         try:
             current_bg = widget.cget("bg")
-            if current_bg in ("#EEEEEE", "#D4D0C8", "#4E4E4E", "#F0F0F0", "#FFFFFF", "#2B2B2B"):
+            _btn_tokens = {p["BTN_SURFACE"] for p in _PALETTES.values()}
+            _surf_tokens = {p["SURFACE"] for p in _PALETTES.values()}
+            if current_bg in _btn_tokens | _surf_tokens:
                 widget.configure(bg=btn, fg=text, activebackground=p["BTN_HOVER"])
         except tk.TclError:
             pass
