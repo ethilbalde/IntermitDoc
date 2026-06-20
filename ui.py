@@ -826,7 +826,7 @@ class DialogueBoostIA(tk.Toplevel):
         self.update_idletasks()
 
         def _run():
-            ok, msg = tester_connexion_ia(provider_id, cle)
+            ok, msg = tester_connexion_ia(provider_id, cle, charger_config())
             def _maj():
                 if ok:
                     lbl_statut.config(text="✓ Connexion OK", fg="#2E7D32")

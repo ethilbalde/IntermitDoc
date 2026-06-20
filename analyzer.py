@@ -498,7 +498,7 @@ def _analyser_mistral(texte: str, api_key: str, modele: str = "mistral-small-lat
         return _resultat_inconnu(f"Mistral : {str(e)[:80]}")
 
 
-def tester_connexion_ia(provider_id: str, api_key: str) -> tuple[bool, str]:
+def tester_connexion_ia(provider_id: str, api_key: str, config: dict | None = None) -> tuple[bool, str]:
     """
     Teste la connexion a un fournisseur IA avec un texte minimal.
     Retourne (succes, message).
@@ -506,9 +506,10 @@ def tester_connexion_ia(provider_id: str, api_key: str) -> tuple[bool, str]:
     texte_test = "Bulletin de paie Mars 2024 Productions XYZ net a payer 1500 EUR"
     try:
         if provider_id == "claude":
+            modele = (config or {}).get("modele_claude", "claude-haiku-4-5-20251001")
             client = Anthropic(api_key=api_key)
             client.messages.create(
-                model="claude-haiku-4-5-20251001", max_tokens=10,
+                model=modele, max_tokens=10,
                 messages=[{"role": "user", "content": "ping"}]
             )
         elif provider_id == "openai":
@@ -559,6 +560,12 @@ def analyser_document_multi(texte: str, config: dict, employeurs: list | None = 
         else:
             continue
         if not r.get("erreur"):
+            # Apply known employers on every individual result
+            if employeurs and pid != "claude":
+                emp = chercher_employeur_connu(texte, employeurs)
+                if emp:
+                    r = dict(r)
+                    r["employeur"] = emp
             resultats[pid] = r
 
     if not resultats:

@@ -403,35 +403,25 @@ def _supprimer_lignes_tableau(img: "Image.Image") -> "Image.Image":
         arr = np.array(img)
         h, w = arr.shape
 
-        # Binariser : pixels sombres (< 128) = trait, pixels clairs = fond
-        sombre = arr < 128
+        sombre = (arr < 128).astype(np.uint8)
 
-        # Supprimer les lignes HORIZONTALES longues (> 20% de la largeur)
+        # Lignes HORIZONTALES : une ligne est "longue" si la convolution glissante
+        # sur seuil_h pixels consécutifs atteint seuil_h (tous sombres).
         seuil_h = max(10, w // 5)
-        for y in range(h):
-            runs = 0
-            for x in range(w):
-                if sombre[y, x]:
-                    runs += 1
-                else:
-                    runs = 0
-                if runs >= seuil_h:
-                    # Effacer toute la ligne sur cette rangee
-                    arr[y, :] = 255
-                    break
+        kernel_h = np.ones(seuil_h, dtype=np.uint8)
+        # convolve chaque rangée — si max >= seuil_h, la rangée contient un trait long
+        conv_h = np.apply_along_axis(
+            lambda row: np.convolve(row, kernel_h, mode="valid").max(), axis=1, arr=sombre
+        )
+        arr[conv_h >= seuil_h, :] = 255
 
-        # Supprimer les lignes VERTICALES longues (> 15% de la hauteur)
+        # Lignes VERTICALES : idem sur les colonnes
         seuil_v = max(8, h // 7)
-        for x in range(w):
-            runs = 0
-            for y in range(h):
-                if sombre[y, x]:
-                    runs += 1
-                else:
-                    runs = 0
-                if runs >= seuil_v:
-                    arr[:, x] = 255
-                    break
+        kernel_v = np.ones(seuil_v, dtype=np.uint8)
+        conv_v = np.apply_along_axis(
+            lambda col: np.convolve(col, kernel_v, mode="valid").max(), axis=0, arr=sombre
+        )
+        arr[:, conv_v >= seuil_v] = 255
 
         return Image.fromarray(arr)
     except Exception:
