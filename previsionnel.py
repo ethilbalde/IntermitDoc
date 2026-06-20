@@ -5,6 +5,7 @@ Stockage JSON dans le dossier de config (%APPDATA%/IntermitDoc en mode exe).
 """
 import json
 import os
+import uuid
 from datetime import date as _date
 from pathlib import Path
 
@@ -42,7 +43,7 @@ def sauvegarder_previsionnels(prevs: list):
 def ajouter_previsionnel(contrat: dict) -> list:
     """Ajoute un contrat prévisionnel et retourne la liste mise à jour."""
     prevs = charger_previsionnels()
-    contrat.setdefault("id", f"prev_{_date.today().isoformat()}_{len(prevs)}")
+    contrat.setdefault("id", f"prev_{_date.today().isoformat()}_{uuid.uuid4().hex[:6]}")
     contrat.setdefault("date_saisie", str(_date.today()))
     prevs.append(contrat)
     sauvegarder_previsionnels(prevs)

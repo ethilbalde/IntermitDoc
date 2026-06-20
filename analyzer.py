@@ -9,6 +9,13 @@ import urllib.request
 import urllib.error
 from anthropic import Anthropic
 
+_client_cache: dict[str, Anthropic] = {}
+
+def _get_client(api_key: str) -> Anthropic:
+    if api_key not in _client_cache:
+        _client_cache[api_key] = Anthropic(api_key=api_key)
+    return _client_cache[api_key]
+
 PROMPT_SYSTEME = """Tu es un assistant specialise dans la classification de documents administratifs francais pour les intermittents du spectacle.
 
 Tu dois analyser le texte extrait d'une page PDF et identifier :
@@ -237,7 +244,7 @@ def analyser_document(texte: str, config: dict, employeurs: list | None = None) 
             break
 
     try:
-        client = Anthropic(api_key=api_key)
+        client = _get_client(api_key)
         modele = config.get("modele_claude", "claude-sonnet-4-6")
 
         message = client.messages.create(
@@ -281,7 +288,7 @@ def analyser_details_aem(texte: str, config: dict) -> dict:
     # Claude en priorite
     if api_key:
         try:
-            client = Anthropic(api_key=api_key)
+            client = _get_client(api_key)
             modele = config.get("modele_claude", "claude-sonnet-4-6")
 
             message = client.messages.create(
@@ -507,7 +514,7 @@ def tester_connexion_ia(provider_id: str, api_key: str, config: dict | None = No
     try:
         if provider_id == "claude":
             modele = (config or {}).get("modele_claude", "claude-haiku-4-5-20251001")
-            client = Anthropic(api_key=api_key)
+            client = _get_client(api_key)
             client.messages.create(
                 model=modele, max_tokens=10,
                 messages=[{"role": "user", "content": "ping"}]

@@ -2188,11 +2188,15 @@ class OngletSuivi(tk.Frame):
         self._docs_tous = _scanner_tous_docs(dossier)
 
         # Déduplication prévisionnels vs AEM réels
-        rapport = _deduplication_previsionnels(self._docs_tous)
-        en_attente_visibles = _prevs_mois_courant_et_precedent(rapport["en_attente"])
-        if rapport["supprimes"] or rapport["conflits"] or en_attente_visibles:
-            _DialogueRapportDedup(self, rapport["supprimes"],
-                                  rapport["conflits"], en_attente_visibles)
+        global _dedup_en_cours
+        if not _dedup_en_cours:
+            _dedup_en_cours = True
+            self.after(60000, self._reset_dedup)
+            rapport = _deduplication_previsionnels(self._docs_tous)
+            en_attente_visibles = _prevs_mois_courant_et_precedent(rapport["en_attente"])
+            if rapport["supprimes"] or rapport["conflits"] or en_attente_visibles:
+                _DialogueRapportDedup(self, rapport["supprimes"],
+                                      rapport["conflits"], en_attente_visibles)
 
         # Recharger après suppressions éventuelles
         self._prevs = charger_previsionnels()
@@ -3328,6 +3332,9 @@ class OngletScan(tk.Frame):
 # ---------------------------------------------------------------------------
 # Déduplication prévisionnels vs AEM classifiés
 # ---------------------------------------------------------------------------
+# Guard to prevent _deduplication_previsionnels from running twice per cycle
+# (OngletSuivi and OngletRecap can both trigger it on the same refresh).
+_dedup_en_cours = False
 
 def _deduplication_previsionnels(docs_reels: list) -> dict:
     """
@@ -4396,6 +4403,10 @@ class _DialogueContratFutur(tk.Toplevel):
         }
         self.destroy()
 
+    def _reset_dedup(self):
+        global _dedup_en_cours
+        _dedup_en_cours = False
+
 
 # ---------------------------------------------------------------------------
 # Onglet Récapitulatif annuel
@@ -4504,11 +4515,15 @@ class OngletRecap(tk.Frame):
             self._docs = _scanner_tous_docs(dossier)
 
             # Déduplication prévisionnels vs AEM réels
-            rapport = _deduplication_previsionnels(self._docs)
-            en_attente_visibles = _prevs_mois_courant_et_precedent(rapport["en_attente"])
-            if rapport["supprimes"] or rapport["conflits"] or en_attente_visibles:
-                _DialogueRapportDedup(self, rapport["supprimes"],
-                                      rapport["conflits"], en_attente_visibles)
+            global _dedup_en_cours
+            if not _dedup_en_cours:
+                _dedup_en_cours = True
+                self.after(60000, self._reset_dedup)
+                rapport = _deduplication_previsionnels(self._docs)
+                en_attente_visibles = _prevs_mois_courant_et_precedent(rapport["en_attente"])
+                if rapport["supprimes"] or rapport["conflits"] or en_attente_visibles:
+                    _DialogueRapportDedup(self, rapport["supprimes"],
+                                          rapport["conflits"], en_attente_visibles)
 
         # Fusionner prévisionnels restants dans self._docs pour l'affichage
         prevs = charger_previsionnels()
@@ -4763,6 +4778,9 @@ class OngletRecap(tk.Frame):
         except (ValueError, TypeError):
             return 0.0
 
+    def _reset_dedup(self):
+        global _dedup_en_cours
+        _dedup_en_cours = False
 
 
 # ---------------------------------------------------------------------------
