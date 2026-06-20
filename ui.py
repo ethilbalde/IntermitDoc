@@ -3255,6 +3255,14 @@ class OngletScan(tk.Frame):
                 "Configurez le dossier de sortie (dossier de base).", parent=self)
             return
 
+        if not messagebox.askyesno(
+            "Confirmer le déplacement",
+            f"Déplacer {len(sel)} fichier(s) vers la structure IntermitDoc ?\n\nCette action est irréversible.",
+            icon="warning",
+            parent=self,
+        ):
+            return
+
         base_sortie = Path(sortie)
         nb_ok = nb_err = 0
 
@@ -4044,7 +4052,7 @@ class OngletHistorique(tk.Frame):
 
             chemin_path.write_bytes(pdf_bytes)
             if chemin_dest != chemin_path:
-                chemin_path.rename(chemin_dest)
+                chemin_path.replace(chemin_dest)
                 contrat["chemin"] = str(chemin_dest)
                 self._chemin_ouvert = str(chemin_dest)
 

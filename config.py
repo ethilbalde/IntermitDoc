@@ -3,11 +3,14 @@ Configuration d'IntermitDoc.
 Gestion de la persistance des paramètres via config.json.
 """
 import json
+import threading
 import tkinter as tk
 from tkinter import simpledialog, messagebox
 from pathlib import Path
 
 import sys as _sys
+
+_LOCK_TRAITES = threading.Lock()
 
 def _dossier_config() -> Path:
     # Quand lance depuis le .exe PyInstaller : sauvegarder dans %APPDATA%
@@ -230,23 +233,24 @@ def enregistrer_traite(chemin_source: str, info: dict) -> str:
     """
     from datetime import date as _date
     empreinte = calculer_empreinte(chemin_source)
-    traites   = charger_traites()
-    traites[empreinte] = {
-        "chemin_source":      chemin_source,
-        "chemin_destination": info.get("chemin_destination", ""),
-        "nom_fichier":        info.get("nom_fichier", ""),
-        "date_traitement":    str(_date.today()),
-        "type":               info.get("type", ""),
-        "annee":              info.get("annee", ""),
-        "mois":               info.get("mois", ""),
-        "date_debut":         info.get("date_debut", ""),
-        "date_fin":           info.get("date_fin", ""),
-        "employeur":          info.get("employeur", ""),
-        "heures":             info.get("heures", ""),
-        "salaire_brut":       info.get("salaire_brut", ""),
-    }
-    with open(TRAITES_FILE, "w", encoding="utf-8") as f:
-        json.dump(traites, f, indent=2, ensure_ascii=False)
+    with _LOCK_TRAITES:
+        traites = charger_traites()
+        traites[empreinte] = {
+            "chemin_source":      chemin_source,
+            "chemin_destination": info.get("chemin_destination", ""),
+            "nom_fichier":        info.get("nom_fichier", ""),
+            "date_traitement":    str(_date.today()),
+            "type":               info.get("type", ""),
+            "annee":              info.get("annee", ""),
+            "mois":               info.get("mois", ""),
+            "date_debut":         info.get("date_debut", ""),
+            "date_fin":           info.get("date_fin", ""),
+            "employeur":          info.get("employeur", ""),
+            "heures":             info.get("heures", ""),
+            "salaire_brut":       info.get("salaire_brut", ""),
+        }
+        with open(TRAITES_FILE, "w", encoding="utf-8") as f:
+            json.dump(traites, f, indent=2, ensure_ascii=False)
     return empreinte
 
 
@@ -257,7 +261,8 @@ def verifier_traite(chemin: str) -> dict | None:
     """
     try:
         empreinte = calculer_empreinte(chemin)
-        return charger_traites().get(empreinte)
+        with _LOCK_TRAITES:
+            return charger_traites().get(empreinte)
     except Exception:
         return None
 
