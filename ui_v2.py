@@ -30,6 +30,7 @@ from ui import (
     DialogueFusionEmployeurs,
     DialogueEdition, FenetreApercu,
     TYPES_DOCUMENTS, charger_employeurs,
+    _installer_tri,
     DND_DISPONIBLE,
 )
 
@@ -58,7 +59,7 @@ class DialogueFusionEmployeursV2(DialogueFusionEmployeurs):
                                     fg=TH2.C.TEXT_3, font=TH2.FONT_SMALL)
         self._lbl_statut.pack(side="bottom", pady=(0, 12))
 
-        btns = ctk.CTkFrame(self, fg_color="transparent")
+        btns = ctk.CTkFrame(self, fg_color=TH2.C.BG)
         btns.pack(side="bottom", pady=12)
         W.bouton_primaire(btns, "Fusionner", command=self._appliquer,
                           width=200, height=46,
@@ -67,7 +68,7 @@ class DialogueFusionEmployeursV2(DialogueFusionEmployeurs):
                             width=150, height=46,
                             font=TH2.FONT_HEADING).pack(side="left", padx=10)
 
-        listes = ctk.CTkFrame(self, fg_color="transparent")
+        listes = ctk.CTkFrame(self, fg_color=TH2.C.BG)
         listes.pack(fill="both", expand=True, padx=20, pady=4)
         listes.columnconfigure(0, weight=1)
         listes.columnconfigure(2, weight=1)
@@ -120,7 +121,7 @@ class DialogueEditionV2(DialogueEdition):
         self.configure(bg=TH2.C.BG)
         self.geometry("760x640")
 
-        cont = ctk.CTkFrame(self, fg_color="transparent")
+        cont = ctk.CTkFrame(self, fg_color=TH2.C.BG)
         cont.pack(fill="both", expand=True, padx=16, pady=16)
 
         # ── Aperçu (gauche) ──────────────────────────────────────────────
@@ -274,7 +275,7 @@ class DialogueEditionV2(DialogueEdition):
         self._on_type_change()
 
         # ── Boutons (ancrés en bas) ──────────────────────────────────────
-        barre = ctk.CTkFrame(self, fg_color="transparent")
+        barre = ctk.CTkFrame(self, fg_color=TH2.C.BG)
         barre.pack(side="bottom", fill="x", padx=16, pady=(0, 14))
         W.bouton_primaire(barre, "Enregistrer et classifier",
                           command=self._enregistrer_et_classifier,
@@ -304,6 +305,77 @@ class TableauPagesV2(TableauPages):
 # Pages refondues (héritent la logique des onglets, réécrivent le layout)
 # ===========================================================================
 
+class PageRecap(OngletRecap):
+    """Onglet Récapitulatif refondu (chrome CTk, logique héritée)."""
+
+    def _construire(self):
+        self.configure(bg=TH2.C.BG)
+
+        # En-tête
+        entete = ctk.CTkFrame(self, fg_color=TH2.C.BG)
+        entete.pack(fill="x", padx=24, pady=(20, 6))
+        ctk.CTkLabel(entete, text="Récapitulatif annuel", font=TH2.FONT_TITLE,
+                     text_color=TH2.C.TEXT, anchor="w").pack(side="left")
+        W.bouton_primaire(entete, "↻  Actualiser", command=self.actualiser,
+                          width=140).pack(side="right")
+
+        # Filtre année
+        filtre = ctk.CTkFrame(self, fg_color=TH2.C.BG)
+        filtre.pack(fill="x", padx=24, pady=(0, 6))
+        ctk.CTkLabel(filtre, text="Filtrer par année", font=TH2.FONT_LABEL,
+                     text_color=TH2.C.TEXT_2).pack(side="left", padx=(0, 8))
+        self.var_annee = tk.StringVar(value="Toutes")
+        self._combo_annee = ttk.Combobox(filtre, textvariable=self.var_annee,
+                                          width=10, state="readonly")
+        self._combo_annee.pack(side="left")
+        self._combo_annee.bind("<<ComboboxSelected>>", lambda e: self._filtrer())
+
+        # Cartes de synthèse (dessinées par _maj_cartes — héritent crème)
+        self._frame_cartes = tk.Frame(self, bg=TH2.C.BG)
+        self._frame_cartes.pack(fill="x", padx=24, pady=4)
+
+        # Tableau détail dans une Card
+        carte = W.Card(self)
+        carte.pack(fill="both", expand=True, padx=24, pady=8)
+        carte.grid_rowconfigure(0, weight=1)
+        carte.grid_columnconfigure(0, weight=1)
+        zone = tk.Frame(carte, bg=TH2.C.SURFACE)
+        zone.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+
+        sv = ctk.CTkScrollbar(zone)
+        sh = ctk.CTkScrollbar(zone, orientation="horizontal")
+        self.tree = ttk.Treeview(
+            zone, columns=[c[0] for c in self.COL], show="headings",
+            yscrollcommand=sv.set, xscrollcommand=sh.set, height=14)
+        sv.configure(command=self.tree.yview)
+        sh.configure(command=self.tree.xview)
+        for col_id, col_titre, col_larg in self.COL:
+            self.tree.column(col_id, width=col_larg, minwidth=40,
+                             stretch=(col_id == "employeur"))
+            self.tree.heading(col_id, text=col_titre)
+        self.tree.tag_configure("aem",       background="#E3F2FD")
+        self.tree.tag_configure("bp",        background="#E8F5E9")
+        self.tree.tag_configure("cs",        background="#FFF8E1")
+        self.tree.tag_configure("ct",        background="#FFF8E1")
+        self.tree.tag_configure("stc",       background="#FCE4EC")
+        self.tree.tag_configure("total",     background="#C5CAE9", font=("", 9, "bold"))
+        self.tree.tag_configure("separateur", background="#E8EAF6",
+                                font=("", 9, "bold"), foreground="#1A237E")
+        self.tree.tag_configure("previsionnel", background="#F3E5F5",
+                                foreground="#6A1B9A", font=("", 9, "italic"))
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        sv.grid(row=0, column=1, sticky="ns")
+        sh.grid(row=1, column=0, sticky="ew")
+        zone.grid_rowconfigure(0, weight=1)
+        zone.grid_columnconfigure(0, weight=1)
+        self._tri = _installer_tri(self.tree, [c[0] for c in self.COL])
+
+        # Pied
+        self._lbl_pied = tk.Label(self, text="", font=TH2.FONT_SMALL,
+                                  bg=TH2.C.BG, fg=TH2.C.TEXT_3)
+        self._lbl_pied.pack(pady=4)
+
+
 class PageEmployeurs(OngletEmployeurs):
     """Onglet Employeurs refondu (Soft UI). Logique 100% héritée."""
 
@@ -311,7 +383,7 @@ class PageEmployeurs(OngletEmployeurs):
         self.configure(bg=TH2.C.BG)
 
         # En-tête
-        entete = ctk.CTkFrame(self, fg_color="transparent")
+        entete = ctk.CTkFrame(self, fg_color=TH2.C.BG)
         entete.pack(fill="x", padx=24, pady=(20, 6))
         ctk.CTkLabel(entete, text="Employeurs", font=TH2.FONT_TITLE,
                      text_color=TH2.C.TEXT, anchor="w").pack(anchor="w")
@@ -325,7 +397,7 @@ class PageEmployeurs(OngletEmployeurs):
         # Carte d'ajout rapide
         carte_ajout = W.Card(self)
         carte_ajout.pack(fill="x", padx=24, pady=8)
-        ligne = ctk.CTkFrame(carte_ajout, fg_color="transparent")
+        ligne = ctk.CTkFrame(carte_ajout, fg_color=TH2.C.SURFACE)
         ligne.pack(fill="x", padx=14, pady=12)
         ctk.CTkLabel(ligne, text="Ajouter un employeur",
                      font=TH2.FONT_LABEL, text_color=TH2.C.TEXT_2).pack(
@@ -345,7 +417,7 @@ class PageEmployeurs(OngletEmployeurs):
         # Carte liste
         carte_liste = W.Card(self)
         carte_liste.pack(fill="both", expand=True, padx=24, pady=8)
-        corps = ctk.CTkFrame(carte_liste, fg_color="transparent")
+        corps = ctk.CTkFrame(carte_liste, fg_color=TH2.C.SURFACE)
         corps.pack(fill="both", expand=True, padx=12, pady=12)
 
         scroll = ctk.CTkScrollbar(corps)
@@ -363,7 +435,7 @@ class PageEmployeurs(OngletEmployeurs):
         self.listbox.bind("<Double-1>", lambda e: self._editer())
 
         # Barre d'actions
-        actions = ctk.CTkFrame(self, fg_color="transparent")
+        actions = ctk.CTkFrame(self, fg_color=TH2.C.BG)
         actions.pack(fill="x", padx=24, pady=(0, 16))
         W.bouton_secondaire(actions, "Modifier", command=self._editer,
                             width=110).pack(side="left", padx=(0, 8))
@@ -457,7 +529,7 @@ class FenetreV2(FenetrePrincipale):
         self.tab_employeurs = self._page_refonte("employeurs", PageEmployeurs)
         self.tab_calcul     = self._page_hote("calcul",     OngletCalcul)
         self.tab_suivi      = self._page_hote("suivi",      OngletSuivi,  cfg=True)
-        self.tab_recap      = self._page_hote("recap",      OngletRecap,  cfg=True)
+        self.tab_recap      = self._page_refonte("recap",   PageRecap,    cfg=True)
         self.tab_scan       = self._page_hote("scan",       OngletScan,   cfg=True)
         self.tab_historique = self._page_hote("historique", OngletHistorique, cfg=True)
 
@@ -478,7 +550,7 @@ class FenetreV2(FenetrePrincipale):
             TH._appliquer_options_tk(self, p)
             # Onglets pas encore refondus uniquement (les pages CTk gèrent leurs couleurs)
             for onglet in (self.tab_calcul, self.tab_suivi,
-                           self.tab_recap, self.tab_scan, self.tab_historique):
+                           self.tab_scan, self.tab_historique):
                 TH._recolorer_widgets(onglet, p)
         except Exception:
             pass
@@ -514,7 +586,7 @@ class FenetreV2(FenetrePrincipale):
         bar.grid_propagate(False)
 
         # Logo / titre
-        entete = ctk.CTkFrame(bar, fg_color="transparent")
+        entete = ctk.CTkFrame(bar, fg_color=TH2.C.SIDEBAR)
         entete.pack(fill="x", padx=14, pady=(18, 18))
         logo = ctk.CTkLabel(entete, text="  IntermitDoc", font=TH2.FONT_HEADING,
                             text_color=TH2.C.TEXT, anchor="w")
@@ -532,7 +604,7 @@ class FenetreV2(FenetrePrincipale):
             self._nav_btns[cle] = b
 
         # Bas de sidebar : outils + thème
-        bas = ctk.CTkFrame(bar, fg_color="transparent")
+        bas = ctk.CTkFrame(bar, fg_color=TH2.C.SIDEBAR)
         bas.pack(side="bottom", fill="x", padx=10, pady=12)
 
         outils = [
@@ -573,7 +645,7 @@ class FenetreV2(FenetrePrincipale):
         parent.grid_rowconfigure(3, weight=1)
 
         # En-tête
-        entete = ctk.CTkFrame(parent, fg_color="transparent")
+        entete = ctk.CTkFrame(parent, fg_color=TH2.C.BG)
         entete.grid(row=0, column=0, sticky="ew", padx=24, pady=(20, 8))
         ctk.CTkLabel(entete, text="Analyse de documents", font=TH2.FONT_TITLE,
                      text_color=TH2.C.TEXT, anchor="w").pack(anchor="w")
@@ -582,7 +654,7 @@ class FenetreV2(FenetrePrincipale):
                      anchor="w").pack(anchor="w")
 
         # Bloc haut : drop zone + KPI
-        haut = ctk.CTkFrame(parent, fg_color="transparent")
+        haut = ctk.CTkFrame(parent, fg_color=TH2.C.BG)
         haut.grid(row=1, column=0, sticky="ew", padx=24, pady=6)
         haut.grid_columnconfigure(0, weight=3)
         haut.grid_columnconfigure(1, weight=2)
@@ -592,7 +664,7 @@ class FenetreV2(FenetrePrincipale):
                                   fg_color=TH2.C.SURFACE,
                                   border_color=TH2.C.ACCENT, border_width=2)
         self._drop.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
-        inner = ctk.CTkFrame(self._drop, fg_color="transparent")
+        inner = ctk.CTkFrame(self._drop, fg_color=TH2.C.SURFACE)
         inner.pack(expand=True, pady=18)
         self._drop_icon = ctk.CTkLabel(inner, text="⬆", font=(TH2.FONT_FAMILY, 30),
                                        text_color=TH2.C.PRIMARY)
@@ -615,7 +687,7 @@ class FenetreV2(FenetrePrincipale):
                 pass
 
         # KPI
-        kpis = ctk.CTkFrame(haut, fg_color="transparent")
+        kpis = ctk.CTkFrame(haut, fg_color=TH2.C.BG)
         kpis.grid(row=0, column=1, sticky="nsew")
         kpis.grid_columnconfigure((0, 1), weight=1)
         self._kpi_docs   = W.KPICard(kpis, "Documents", "0")
@@ -627,7 +699,7 @@ class FenetreV2(FenetrePrincipale):
         self._kpi_att.grid(row=1, column=0, columnspan=2, sticky="ew", padx=4, pady=4)
 
         # Barre d'actions
-        actions = ctk.CTkFrame(parent, fg_color="transparent")
+        actions = ctk.CTkFrame(parent, fg_color=TH2.C.BG)
         actions.grid(row=2, column=0, sticky="ew", padx=24, pady=(8, 4))
         W.bouton_secondaire(actions, "Parcourir…", command=self._choisir_fichier,
                             width=130).pack(side="left", padx=(0, 8))
@@ -655,7 +727,7 @@ class FenetreV2(FenetrePrincipale):
         self.tableau.pack(fill="both", expand=True)
 
         # Actions de classification
-        cl = ctk.CTkFrame(parent, fg_color="transparent")
+        cl = ctk.CTkFrame(parent, fg_color=TH2.C.BG)
         cl.grid(row=4, column=0, sticky="ew", padx=24, pady=(0, 4))
         self.btn_classifier = W.bouton_primaire(cl, "Classifier tout",
                                                 command=self._classifier_tout, width=150)
@@ -671,7 +743,7 @@ class FenetreV2(FenetrePrincipale):
             b.configure(state="disabled")
 
         # Footer : loader + progression + log
-        footer = ctk.CTkFrame(parent, fg_color="transparent")
+        footer = ctk.CTkFrame(parent, fg_color=TH2.C.BG)
         footer.grid(row=5, column=0, sticky="ew", padx=24, pady=(0, 14))
         footer.grid_columnconfigure(1, weight=1)
 
