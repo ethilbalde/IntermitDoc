@@ -67,6 +67,8 @@ class KPICard(ctk.CTkFrame):
 # ---------------------------------------------------------------------------
 
 def bouton_primaire(master, text: str, command=None, icon: str = "", **kwargs):
+    kwargs.setdefault("height", 38)
+    kwargs.setdefault("font", TH2.FONT_BODY)
     return ctk.CTkButton(
         master,
         text=(f"{icon}  {text}" if icon else text),
@@ -75,13 +77,13 @@ def bouton_primaire(master, text: str, command=None, icon: str = "", **kwargs):
         fg_color=TH2.C.PRIMARY,
         hover_color=TH2.C.PRIMARY_HOV,
         text_color=TH2.C.ON_PRIMARY,
-        font=TH2.FONT_BODY,
-        height=38,
         **kwargs,
     )
 
 
 def bouton_secondaire(master, text: str, command=None, icon: str = "", **kwargs):
+    kwargs.setdefault("height", 38)
+    kwargs.setdefault("font", TH2.FONT_BODY)
     return ctk.CTkButton(
         master,
         text=(f"{icon}  {text}" if icon else text),
@@ -92,8 +94,6 @@ def bouton_secondaire(master, text: str, command=None, icon: str = "", **kwargs)
         text_color=TH2.C.PRIMARY,
         border_color=TH2.C.PRIMARY,
         border_width=1,
-        font=TH2.FONT_BODY,
-        height=38,
         **kwargs,
     )
 

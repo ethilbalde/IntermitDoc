@@ -19,13 +19,384 @@ import customtkinter as ctk
 
 import theme_v2 as TH2
 import widgets_v2 as W
+import io
+from PIL import Image, ImageTk
+
 from ui import (
     FenetrePrincipale,
     OngletEmployeurs, OngletCalcul, OngletSuivi,
     OngletRecap, OngletScan, OngletHistorique,
     TableauPages,
+    DialogueFusionEmployeurs,
+    DialogueEdition, FenetreApercu,
+    TYPES_DOCUMENTS, charger_employeurs,
     DND_DISPONIBLE,
 )
+
+
+# ===========================================================================
+# Dialogues refondus
+# ===========================================================================
+
+class DialogueFusionEmployeursV2(DialogueFusionEmployeurs):
+    """Dialogue de fusion refondu (Soft UI). Logique héritée."""
+
+    def _construire(self):
+        self.configure(bg=TH2.C.BG)
+        self.geometry("840x620")
+        self.minsize(720, 520)
+
+        ctk.CTkLabel(
+            self,
+            text="Gauche : noms à fusionner (Ctrl+clic = multi)   ·   "
+                 "Droite : nom à conserver   ·   Double-clic = voir les documents",
+            font=TH2.FONT_LABEL, text_color=TH2.C.TEXT_3, justify="left",
+        ).pack(padx=20, pady=(16, 8), anchor="w")
+
+        # Bas (boutons + statut) packé EN PREMIER pour rester toujours visible
+        self._lbl_statut = tk.Label(self, text="", bg=TH2.C.BG,
+                                    fg=TH2.C.TEXT_3, font=TH2.FONT_SMALL)
+        self._lbl_statut.pack(side="bottom", pady=(0, 12))
+
+        btns = ctk.CTkFrame(self, fg_color="transparent")
+        btns.pack(side="bottom", pady=12)
+        W.bouton_primaire(btns, "Fusionner", command=self._appliquer,
+                          width=200, height=46,
+                          font=TH2.FONT_HEADING).pack(side="left", padx=10)
+        W.bouton_secondaire(btns, "Annuler", command=self.destroy,
+                            width=150, height=46,
+                            font=TH2.FONT_HEADING).pack(side="left", padx=10)
+
+        listes = ctk.CTkFrame(self, fg_color="transparent")
+        listes.pack(fill="both", expand=True, padx=20, pady=4)
+        listes.columnconfigure(0, weight=1)
+        listes.columnconfigure(2, weight=1)
+        listes.rowconfigure(1, weight=1)
+
+        def _colonne(col, titre, couleur, mode):
+            ctk.CTkLabel(listes, text=titre, font=TH2.FONT_LABEL,
+                         text_color=couleur, anchor="w").grid(
+                row=0, column=col, sticky="w", pady=(0, 4))
+            carte = W.Card(listes)
+            carte.grid(row=1, column=col, sticky="nsew")
+            carte.rowconfigure(0, weight=1)
+            carte.columnconfigure(0, weight=1)
+            sb = ctk.CTkScrollbar(carte)
+            sb.grid(row=0, column=1, sticky="ns", pady=8, padx=(0, 6))
+            lb = tk.Listbox(
+                carte, selectmode=mode, yscrollcommand=sb.set,
+                exportselection=False, font=("Segoe UI", 11),
+                activestyle="none", height=18,
+                bg=TH2.C.SURFACE, fg=TH2.C.TEXT,
+                selectbackground=TH2.C.PRIMARY, selectforeground=TH2.C.ON_PRIMARY,
+                relief="flat", highlightthickness=0, bd=0,
+            )
+            lb.grid(row=0, column=0, sticky="nsew", padx=(8, 0), pady=8)
+            sb.configure(command=lb.yview)
+            return lb
+
+        self._lb_sources = _colonne(0, "Noms à fusionner (sources)",
+                                    TH2.C.DANGER, tk.MULTIPLE)
+        ctk.CTkLabel(listes, text="→", font=(TH2.FONT_FAMILY, 18, "bold"),
+                     text_color=TH2.C.PRIMARY).grid(row=1, column=1, padx=10)
+        self._lb_cible = _colonne(2, "Nom à conserver (cible)",
+                                  TH2.C.SUCCESS, tk.SINGLE)
+
+        for emp in self._employeurs:
+            self._lb_sources.insert(tk.END, f"  {emp}")
+            self._lb_cible.insert(tk.END, f"  {emp}")
+        self._lb_sources.bind("<Double-1>", lambda e: self._voir_docs(self._lb_sources))
+        self._lb_cible.bind("<Double-1>", lambda e: self._voir_docs(self._lb_cible))
+
+        self._lb_sources.bind("<<ListboxSelect>>", self._maj_statut)
+        self._lb_cible.bind("<<ListboxSelect>>",   self._maj_statut)
+
+
+class DialogueEditionV2(DialogueEdition):
+    """Dialogue d'édition refondu (Soft UI). Champs tk/ttk conservés (manipulés
+    par la logique héritée), structure et lisibilité modernisées."""
+
+    def _construire(self):
+        self.configure(bg=TH2.C.BG)
+        self.geometry("760x640")
+
+        cont = ctk.CTkFrame(self, fg_color="transparent")
+        cont.pack(fill="both", expand=True, padx=16, pady=16)
+
+        # ── Aperçu (gauche) ──────────────────────────────────────────────
+        carte_ap = W.Card(cont)
+        carte_ap.pack(side="left", fill="y", padx=(0, 14))
+        ctk.CTkLabel(carte_ap, text="Aperçu", font=TH2.FONT_HEADING,
+                     text_color=TH2.C.TEXT).pack(padx=16, pady=(12, 6))
+        if self.ligne.miniature_bytes:
+            try:
+                img = Image.open(io.BytesIO(self.ligne.miniature_bytes))
+                img.thumbnail((220, 300))
+                self._photo = ImageTk.PhotoImage(img)
+                lbl = tk.Label(carte_ap, image=self._photo, cursor="hand2",
+                               bg=TH2.C.SURFACE, bd=0)
+                lbl.pack(padx=16)
+                lbl.bind("<Button-1>", lambda e: FenetreApercu(
+                    self, self.ligne.info_page["chemin_source"],
+                    self.ligne.info_page["numero"], f"Page {self.ligne.numero}"))
+                ctk.CTkLabel(carte_ap, text="Cliquer pour agrandir",
+                             font=TH2.FONT_SMALL, text_color=TH2.C.TEXT_3).pack(
+                    padx=16, pady=(6, 14))
+            except Exception:
+                ctk.CTkLabel(carte_ap, text="(pas d'aperçu)",
+                             text_color=TH2.C.TEXT_3).pack(padx=20, pady=20)
+
+        # ── Formulaire (droite) ──────────────────────────────────────────
+        carte_form = W.Card(cont)
+        carte_form.pack(side="left", fill="both", expand=True)
+        ctk.CTkLabel(carte_form, text="Informations du document",
+                     font=TH2.FONT_HEADING, text_color=TH2.C.TEXT,
+                     anchor="w").pack(fill="x", padx=18, pady=(14, 8))
+
+        form = tk.Frame(carte_form, bg=TH2.C.SURFACE)
+        form.pack(fill="both", expand=True, padx=18, pady=(0, 8))
+
+        a = self.ligne.analyse
+
+        def _lbl(parent, txt, r, col=0, **kw):
+            return tk.Label(parent, text=txt, anchor="w", bg=TH2.C.SURFACE,
+                            fg=TH2.C.TEXT_2, font=TH2.FONT_LABEL, **kw)
+
+        def _entry(parent, var, width):
+            return tk.Entry(parent, textvariable=var, width=width,
+                            font=TH2.FONT_BODY, relief="solid", bd=1,
+                            bg=TH2.C.SURFACE_2, fg=TH2.C.TEXT,
+                            insertbackground=TH2.C.TEXT,
+                            highlightthickness=1, highlightbackground=TH2.C.BORDER,
+                            highlightcolor=TH2.C.PRIMARY)
+
+        row = 0
+        _lbl(form, "Type", row).grid(row=row, column=0, sticky="w", pady=5)
+        self.var_type = tk.StringVar(value=a.get("type", "INCONNU"))
+        ttk.Combobox(form, textvariable=self.var_type, values=TYPES_DOCUMENTS,
+                     state="readonly", width=14).grid(row=row, column=1, sticky="w",
+                                                      padx=8, pady=5)
+        conf = a.get("confiance", 0)
+        if conf >= 0.8:
+            conf_txt, conf_fg = f"{conf:.0%}  ✓ élevée", TH2.C.SUCCESS
+        elif conf >= 0.5:
+            conf_txt, conf_fg = f"{conf:.0%}  ~ moyenne", TH2.C.WARNING
+        else:
+            conf_txt, conf_fg = (f"{conf:.0%}  ✗ basse", TH2.C.DANGER) if conf else ("", TH2.C.TEXT_3)
+        if conf_txt:
+            tk.Label(form, text=conf_txt, font=TH2.FONT_SMALL, bg=TH2.C.SURFACE,
+                     fg=conf_fg).grid(row=row, column=2, sticky="w", padx=4)
+        row += 1
+
+        _lbl(form, "Année (YYYY)", row).grid(row=row, column=0, sticky="w", pady=5)
+        self.var_annee = tk.StringVar(value=a.get("annee", ""))
+        _entry(form, self.var_annee, 8).grid(row=row, column=1, sticky="w", padx=8, pady=5)
+        row += 1
+
+        _lbl(form, "Mois", row).grid(row=row, column=0, sticky="w", pady=5)
+        mois_val = a.get("mois", "")
+        mois_label = next((m for m in self.LISTE_MOIS if m.startswith(mois_val)),
+                          self.LISTE_MOIS[0])
+        self.var_mois = tk.StringVar(value=mois_label)
+        ttk.Combobox(form, textvariable=self.var_mois, values=self.LISTE_MOIS,
+                     state="readonly", width=18).grid(row=row, column=1, sticky="w",
+                                                      padx=8, pady=5)
+        row += 1
+
+        _lbl(form, "Date début (JJ)", row).grid(row=row, column=0, sticky="w", pady=5)
+        self.var_debut = tk.StringVar(value=a.get("date_debut", ""))
+        _entry(form, self.var_debut, 5).grid(row=row, column=1, sticky="w", padx=8, pady=5)
+        row += 1
+
+        _lbl(form, "Date fin (JJ)", row).grid(row=row, column=0, sticky="w", pady=5)
+        self.var_fin = tk.StringVar(value=a.get("date_fin", ""))
+        _entry(form, self.var_fin, 5).grid(row=row, column=1, sticky="w", padx=8, pady=5)
+        row += 1
+
+        _lbl(form, "Employeur", row).grid(row=row, column=0, sticky="w", pady=5)
+        self.var_employeur = tk.StringVar(value=a.get("employeur", ""))
+        frame_emp = tk.Frame(form, bg=TH2.C.SURFACE)
+        frame_emp.grid(row=row, column=1, columnspan=2, sticky="w", padx=8, pady=5)
+        self._employeurs_liste = charger_employeurs()
+        self._cb_employeur = ttk.Combobox(frame_emp, textvariable=self.var_employeur,
+                                          values=self._employeurs_liste, width=28)
+        self._cb_employeur.pack(side="left")
+        W.bouton_secondaire(frame_emp, "+ Ajouter", command=self._ajouter_employeur,
+                            width=90, height=28, font=TH2.FONT_SMALL).pack(
+            side="left", padx=(6, 0))
+        row += 1
+
+        self._sep_aem = ttk.Separator(form, orient="horizontal")
+        self._sep_aem.grid(row=row, column=0, columnspan=3, sticky="ew", pady=(10, 4))
+        row += 1
+        self._lbl_aem_section = tk.Label(form, text="Champs spécifiques AEM",
+                                         font=TH2.FONT_SMALL, bg=TH2.C.SURFACE,
+                                         fg=TH2.C.TEXT_3, anchor="w")
+        self._lbl_aem_section.grid(row=row, column=0, columnspan=3, sticky="w", pady=(0, 4))
+        row += 1
+
+        self._lbl_heures = _lbl(form, "Heures", row)
+        self._lbl_heures.grid(row=row, column=0, sticky="w", pady=5)
+        self.var_heures = tk.StringVar(value=a.get("heures", ""))
+        self.entry_heures = _entry(form, self.var_heures, 10)
+        self.entry_heures.grid(row=row, column=1, sticky="w", padx=8, pady=5)
+        tk.Label(form, text="h", bg=TH2.C.SURFACE, fg=TH2.C.TEXT_2,
+                 font=TH2.FONT_BODY).grid(row=row, column=2, sticky="w")
+        self.var_heures.trace_add("write",
+                                  lambda *_: self.entry_heures.config(bg=TH2.C.SURFACE_2))
+        row += 1
+
+        self._lbl_salaire = _lbl(form, "Salaire brut", row)
+        self._lbl_salaire.grid(row=row, column=0, sticky="w", pady=5)
+        self.var_salaire = tk.StringVar(value=a.get("salaire_brut", ""))
+        self.entry_salaire = _entry(form, self.var_salaire, 12)
+        self.entry_salaire.grid(row=row, column=1, sticky="w", padx=8, pady=5)
+        tk.Label(form, text="EUR", bg=TH2.C.SURFACE, fg=TH2.C.TEXT_2,
+                 font=TH2.FONT_BODY).grid(row=row, column=2, sticky="w")
+        self.var_salaire.trace_add("write",
+                                   lambda *_: self.entry_salaire.config(bg=TH2.C.SURFACE_2))
+        row += 1
+
+        ttk.Separator(form, orient="horizontal").grid(
+            row=row, column=0, columnspan=3, sticky="ew", pady=(10, 6))
+        row += 1
+        tk.Label(form, text="Nom prévu", bg=TH2.C.SURFACE, fg=TH2.C.TEXT_2,
+                 font=TH2.FONT_LABEL).grid(row=row, column=0, sticky="w", pady=4)
+        self.lbl_nom = tk.Label(form, text=self.ligne.nom_fichier_prevu(),
+                                font=TH2.FONT_SMALL, bg=TH2.C.SURFACE,
+                                fg=TH2.C.PRIMARY, wraplength=360, justify="left")
+        self.lbl_nom.grid(row=row, column=1, columnspan=2, sticky="w", padx=8)
+
+        for var in (self.var_type, self.var_annee, self.var_mois, self.var_debut,
+                    self.var_fin, self.var_employeur, self.var_heures, self.var_salaire):
+            var.trace_add("write", self._maj_nom_prevu)
+        self.var_type.trace_add("write", self._on_type_change)
+        self._on_type_change()
+
+        # ── Boutons (ancrés en bas) ──────────────────────────────────────
+        barre = ctk.CTkFrame(self, fg_color="transparent")
+        barre.pack(side="bottom", fill="x", padx=16, pady=(0, 14))
+        W.bouton_primaire(barre, "Enregistrer et classifier",
+                          command=self._enregistrer_et_classifier,
+                          width=210, height=42).pack(side="left", padx=(0, 8))
+        W.bouton_secondaire(barre, "Enregistrer",
+                            command=self._enregistrer, width=130, height=42).pack(
+            side="left", padx=(0, 8))
+        W.bouton_secondaire(barre, "Annuler", command=self.destroy,
+                            width=110, height=42).pack(side="left")
+
+
+class TableauPagesV2(TableauPages):
+    """TableauPages utilisant le dialogue d'édition refondu."""
+
+    def _ouvrir_edition(self, idx: int):
+        ligne = self.lignes[idx]
+
+        def callback_maj(classifier=False):
+            self.mettre_a_jour_ligne(idx)
+            if classifier:
+                self.app._classifier_ligne(idx)
+
+        DialogueEditionV2(self, ligne, callback_maj)
+
+
+# ===========================================================================
+# Pages refondues (héritent la logique des onglets, réécrivent le layout)
+# ===========================================================================
+
+class PageEmployeurs(OngletEmployeurs):
+    """Onglet Employeurs refondu (Soft UI). Logique 100% héritée."""
+
+    def _construire(self):
+        self.configure(bg=TH2.C.BG)
+
+        # En-tête
+        entete = ctk.CTkFrame(self, fg_color="transparent")
+        entete.pack(fill="x", padx=24, pady=(20, 6))
+        ctk.CTkLabel(entete, text="Employeurs", font=TH2.FONT_TITLE,
+                     text_color=TH2.C.TEXT, anchor="w").pack(anchor="w")
+        ctk.CTkLabel(
+            entete,
+            text="Noms recherchés directement dans chaque document — "
+                 "prioritaires sur la détection IA. Double-clic pour modifier.",
+            font=TH2.FONT_LABEL, text_color=TH2.C.TEXT_3,
+            anchor="w", justify="left").pack(anchor="w")
+
+        # Carte d'ajout rapide
+        carte_ajout = W.Card(self)
+        carte_ajout.pack(fill="x", padx=24, pady=8)
+        ligne = ctk.CTkFrame(carte_ajout, fg_color="transparent")
+        ligne.pack(fill="x", padx=14, pady=12)
+        ctk.CTkLabel(ligne, text="Ajouter un employeur",
+                     font=TH2.FONT_LABEL, text_color=TH2.C.TEXT_2).pack(
+            side="left", padx=(0, 10))
+        self.var_nom = tk.StringVar()
+        entry = ctk.CTkEntry(ligne, textvariable=self.var_nom,
+                             font=TH2.FONT_BODY, height=36,
+                             corner_radius=TH2.RADIUS_MD,
+                             fg_color=TH2.C.SURFACE_2, border_color=TH2.C.BORDER,
+                             text_color=TH2.C.TEXT,
+                             placeholder_text="Nom de l'employeur…")
+        entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        entry.bind("<Return>", lambda e: self._ajouter())
+        W.bouton_primaire(ligne, "Ajouter", command=self._ajouter,
+                          width=110).pack(side="left")
+
+        # Carte liste
+        carte_liste = W.Card(self)
+        carte_liste.pack(fill="both", expand=True, padx=24, pady=8)
+        corps = ctk.CTkFrame(carte_liste, fg_color="transparent")
+        corps.pack(fill="both", expand=True, padx=12, pady=12)
+
+        scroll = ctk.CTkScrollbar(corps)
+        scroll.pack(side="right", fill="y")
+        self.listbox = tk.Listbox(
+            corps, yscrollcommand=scroll.set,
+            selectmode=tk.SINGLE, font=("Segoe UI", 12),
+            activestyle="none", height=16,
+            bg=TH2.C.SURFACE, fg=TH2.C.TEXT,
+            selectbackground=TH2.C.PRIMARY, selectforeground=TH2.C.ON_PRIMARY,
+            relief="flat", highlightthickness=0, bd=0,
+        )
+        self.listbox.pack(side="left", fill="both", expand=True)
+        scroll.configure(command=self.listbox.yview)
+        self.listbox.bind("<Double-1>", lambda e: self._editer())
+
+        # Barre d'actions
+        actions = ctk.CTkFrame(self, fg_color="transparent")
+        actions.pack(fill="x", padx=24, pady=(0, 16))
+        W.bouton_secondaire(actions, "Modifier", command=self._editer,
+                            width=110).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(
+            actions, text="Supprimer", command=self._supprimer, width=110,
+            corner_radius=TH2.RADIUS_MD, height=38, fg_color="transparent",
+            hover_color=TH2.C.SURFACE_2, text_color=TH2.C.DANGER,
+            border_color=TH2.C.DANGER, border_width=1, font=TH2.FONT_BODY,
+        ).pack(side="left", padx=(0, 8))
+        W.bouton_secondaire(actions, "Scanner les documents",
+                            command=self._scanner_depuis_docs,
+                            width=190).pack(side="left", padx=(0, 8))
+        W.bouton_secondaire(actions, "Fusionner doublons…",
+                            command=self._fusionner_doublons,
+                            width=180).pack(side="left", padx=(0, 8))
+
+        self.lbl_count = ctk.CTkLabel(actions, text="", font=TH2.FONT_LABEL,
+                                      text_color=TH2.C.TEXT_3)
+        self.lbl_count.config = self.lbl_count.configure
+        self.lbl_count.pack(side="right", padx=8)
+
+        self._rafraichir_liste()
+
+    def _fusionner_doublons(self):
+        """Override : utilise le dialogue de fusion refondu."""
+        if not self._employeurs:
+            from tkinter import messagebox
+            messagebox.showinfo("Liste vide", "Aucun employeur enregistré.", parent=self)
+            return
+        from config import charger_config
+        dossier_base = charger_config().get("dossier_base", "")
+        DialogueFusionEmployeursV2(self, self._employeurs, dossier_base,
+                                   self._appliquer_fusions)
 
 try:
     from tkinterdnd2 import DND_FILES
@@ -83,7 +454,7 @@ class FenetreV2(FenetrePrincipale):
         self._pages["analyse"] = page_analyse
 
         # Pages existantes (onglets inchangés) embarquées dans un conteneur CTk
-        self.tab_employeurs = self._page_hote("employeurs", OngletEmployeurs)
+        self.tab_employeurs = self._page_refonte("employeurs", PageEmployeurs)
         self.tab_calcul     = self._page_hote("calcul",     OngletCalcul)
         self.tab_suivi      = self._page_hote("suivi",      OngletSuivi,  cfg=True)
         self.tab_recap      = self._page_hote("recap",      OngletRecap,  cfg=True)
@@ -102,7 +473,11 @@ class FenetreV2(FenetrePrincipale):
             p = TH._palette()
             TH._update_globals(p)
             TH._patch_ttk_style(p)
-            for onglet in (self.tab_employeurs, self.tab_calcul, self.tab_suivi,
+            # Défauts option_add → tous les dialogues tk créés ensuite (Édition,
+            # Aperçu, Paramètres…) héritent automatiquement de la palette figma.
+            TH._appliquer_options_tk(self, p)
+            # Onglets pas encore refondus uniquement (les pages CTk gèrent leurs couleurs)
+            for onglet in (self.tab_calcul, self.tab_suivi,
                            self.tab_recap, self.tab_scan, self.tab_historique):
                 TH._recolorer_widgets(onglet, p)
         except Exception:
@@ -117,6 +492,18 @@ class FenetreV2(FenetrePrincipale):
         else:
             onglet = Classe(hote)
         onglet.pack(fill="both", expand=True, padx=4, pady=4)
+        self._pages[cle] = hote
+        return onglet
+
+    def _page_refonte(self, cle: str, Classe, cfg: bool = False):
+        """Crée une page refondue (CTk) — gère ses propres couleurs."""
+        hote = ctk.CTkFrame(self._zone, fg_color=TH2.C.BG, corner_radius=0)
+        hote.grid(row=0, column=0, sticky="nsew")
+        if cfg:
+            onglet = Classe(hote, cfg_getter=lambda: self.cfg)
+        else:
+            onglet = Classe(hote)
+        onglet.pack(fill="both", expand=True)
         self._pages[cle] = hote
         return onglet
 
@@ -264,7 +651,7 @@ class FenetreV2(FenetrePrincipale):
         carte_res.grid_columnconfigure(0, weight=1)
         hote_tab = tk.Frame(carte_res, bg=TH2.C.SURFACE)
         hote_tab.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
-        self.tableau = TableauPages(hote_tab, app=self)
+        self.tableau = TableauPagesV2(hote_tab, app=self)
         self.tableau.pack(fill="both", expand=True)
 
         # Actions de classification
