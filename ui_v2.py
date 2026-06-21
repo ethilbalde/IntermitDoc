@@ -376,6 +376,200 @@ class PageRecap(OngletRecap):
         self._lbl_pied.pack(pady=4)
 
 
+class PageHistorique(OngletHistorique):
+    """Onglet Historique refondu. Logique 100% héritée."""
+
+    def _construire(self):
+        self.configure(bg=TH2.C.BG)
+
+        # ── En-tête ─────────────────────────────────────────────────────────
+        entete = ctk.CTkFrame(self, fg_color=TH2.C.BG)
+        entete.pack(fill="x", padx=24, pady=(20, 6))
+        ctk.CTkLabel(entete, text="Historique", font=TH2.FONT_TITLE,
+                     text_color=TH2.C.TEXT, anchor="w").pack(side="left")
+        W.bouton_primaire(entete, "+ Contrat Futur",
+                          command=self._creer_previsionnel,
+                          width=160).pack(side="right")
+
+        # ── Barre navigation ────────────────────────────────────────────────
+        nav = ctk.CTkFrame(self, fg_color=TH2.C.BG)
+        nav.pack(fill="x", padx=24, pady=(0, 6))
+
+        def _btn_nav(parent, txt, cmd):
+            return ctk.CTkButton(parent, text=txt, command=cmd, width=36,
+                                 height=32, corner_radius=TH2.RADIUS_MD,
+                                 font=TH2.FONT_BODY, fg_color=TH2.C.PRIMARY,
+                                 hover_color=TH2.C.PRIMARY_HOV,
+                                 text_color=TH2.C.ON_PRIMARY)
+
+        _btn_nav(nav, "◀", lambda: self._naviguer(-1)).pack(side="left", padx=(0, 6))
+        ctk.CTkLabel(nav, text="Année", font=TH2.FONT_LABEL,
+                     text_color=TH2.C.TEXT_2).pack(side="left", padx=(0, 4))
+        self._cb_annee = ttk.Combobox(nav, textvariable=self._annee_var,
+                                      width=7, state="readonly")
+        self._cb_annee.pack(side="left", padx=(0, 12))
+        self._cb_annee.bind("<<ComboboxSelected>>", lambda e: self._on_annee_change())
+
+        ctk.CTkLabel(nav, text="Mois", font=TH2.FONT_LABEL,
+                     text_color=TH2.C.TEXT_2).pack(side="left", padx=(0, 4))
+        self._cb_mois = ttk.Combobox(nav, textvariable=self._mois_var,
+                                     width=14, state="readonly")
+        self._cb_mois.pack(side="left", padx=(0, 6))
+        self._cb_mois.bind("<<ComboboxSelected>>", lambda e: self._actualiser_liste())
+
+        _btn_nav(nav, "▶", lambda: self._naviguer(+1)).pack(side="left", padx=(0, 16))
+        W.bouton_secondaire(nav, "🔄 Actualiser",
+                            command=self._actualiser_liste,
+                            width=130).pack(side="left")
+
+        # ── Corps : liste (gauche) + détails (droite) ────────────────────────
+        corps = tk.Frame(self, bg=TH2.C.BG)
+        corps.pack(fill="both", expand=True, padx=24, pady=(0, 16))
+        corps.columnconfigure(0, weight=1)
+        corps.columnconfigure(1, weight=0)
+        corps.rowconfigure(0, weight=1)
+
+        # ── Carte liste ──────────────────────────────────────────────────────
+        carte_liste = W.Card(corps)
+        carte_liste.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        carte_liste.grid_rowconfigure(0, weight=1)
+        carte_liste.grid_columnconfigure(0, weight=1)
+
+        zone_tree = tk.Frame(carte_liste, bg=TH2.C.SURFACE)
+        zone_tree.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        zone_tree.columnconfigure(0, weight=1)
+        zone_tree.rowconfigure(0, weight=1)
+
+        cols = [c[0] for c in self.COL]
+        self.tree = ttk.Treeview(zone_tree, columns=cols, show="headings",
+                                 selectmode="browse")
+        for cid, label, w in self.COL:
+            self.tree.heading(cid, text=label)
+            self.tree.column(cid, width=w, minwidth=40, anchor="w")
+
+        self.tree.tag_configure("previsionnel", foreground="#6A1B9A",
+                                font=("Segoe UI", 9, "italic"))
+        self.tree.tag_configure("classifie", foreground=TH2.C.PRIMARY)
+
+        sv = ctk.CTkScrollbar(zone_tree, command=self.tree.yview)
+        self.tree.configure(yscrollcommand=sv.set)
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        sv.grid(row=0, column=1, sticky="ns")
+
+        self.tree.bind("<<TreeviewSelect>>", self._on_select)
+        self.tree.bind("<Double-Button-1>",  self._on_double_clic)
+        self.tree.bind("<Button-3>",         self._on_clic_droit)
+        self._tri = _installer_tri(self.tree, [c[0] for c in self.COL
+                                               if c[0] != "statut"])
+
+        # Menu contextuel clic droit
+        self._menu_ctx = tk.Menu(self, tearoff=0)
+        self._menu_ctx.add_command(label="📄  Ouvrir le document",
+                                   command=self._ouvrir_pdf_fenetre)
+        self._menu_ctx.add_command(label="📁  Ouvrir le dossier dans l'Explorateur",
+                                   command=self._ouvrir_dossier_explorateur)
+        self._menu_ctx.add_separator()
+        self._menu_ctx.add_command(label="📋  Dupliquer vers d'autres dates...",
+                                   command=self._dupliquer_contrat)
+        self._menu_ctx.add_separator()
+        self._menu_ctx.add_command(label="💾  Enregistrer les modifications",
+                                   command=self._sauvegarder)
+        self._menu_ctx.add_command(label="🗑  Supprimer le prévisionnel",
+                                   command=self._supprimer_previsionnel)
+
+        # ── Carte détails ────────────────────────────────────────────────────
+        carte_detail = W.Card(corps)
+        carte_detail.grid(row=0, column=1, sticky="nsew")
+        carte_detail.configure(width=350)
+
+        corps_detail = ctk.CTkFrame(carte_detail, fg_color=TH2.C.SURFACE)
+        corps_detail.pack(fill="both", expand=True, padx=12, pady=12)
+
+        ctk.CTkLabel(corps_detail, text="Détails du contrat",
+                     font=TH2.FONT_HEADING, text_color=TH2.C.TEXT,
+                     anchor="w").pack(fill="x", pady=(0, 8))
+
+        champs = [
+            ("type",       "Type",         ["AEM", "BP", "CS", "CT", "STC"]),
+            ("annee",      "Année",        None),
+            ("mois",       "Mois",         list(self.MOIS_NUM)),
+            ("employeur",  "Employeur",    None),
+            ("date_debut", "Date début",   None),
+            ("date_fin",   "Date fin",     None),
+            ("heures",     "Heures",       None),
+            ("salaire",    "Salaire brut", None),
+        ]
+        self._vars_form: dict = {}
+        self._widgets_form: dict = {}
+
+        for key, label, options in champs:
+            ligne = ctk.CTkFrame(corps_detail, fg_color=TH2.C.SURFACE)
+            ligne.pack(fill="x", pady=2)
+            ctk.CTkLabel(ligne, text=label + " :", font=TH2.FONT_LABEL,
+                         text_color=TH2.C.TEXT_2, width=100,
+                         anchor="e").pack(side="left", padx=(0, 6))
+            var = tk.StringVar()
+            self._vars_form[key] = var
+            if options:
+                w = ctk.CTkComboBox(ligne, variable=var, values=options,
+                                    width=170, font=TH2.FONT_BODY,
+                                    fg_color=TH2.C.SURFACE_2,
+                                    border_color=TH2.C.BORDER,
+                                    text_color=TH2.C.TEXT,
+                                    corner_radius=TH2.RADIUS_MD)
+            else:
+                w = ctk.CTkEntry(ligne, textvariable=var, width=170,
+                                 font=TH2.FONT_BODY,
+                                 fg_color=TH2.C.SURFACE_2,
+                                 border_color=TH2.C.BORDER,
+                                 text_color=TH2.C.TEXT,
+                                 corner_radius=TH2.RADIUS_MD)
+            w.config = w.configure
+            w.pack(side="left")
+            self._widgets_form[key] = w
+
+        # Champ note
+        ligne_note = ctk.CTkFrame(corps_detail, fg_color=TH2.C.SURFACE)
+        ligne_note.pack(fill="x", pady=2)
+        ctk.CTkLabel(ligne_note, text="Note :", font=TH2.FONT_LABEL,
+                     text_color=TH2.C.TEXT_2, width=100,
+                     anchor="e").pack(side="left", padx=(0, 6))
+        self._var_note = tk.StringVar()
+        self._txt_note = ctk.CTkEntry(ligne_note, textvariable=self._var_note,
+                                      width=170, font=TH2.FONT_BODY,
+                                      fg_color=TH2.C.SURFACE_2,
+                                      border_color=TH2.C.BORDER,
+                                      text_color=TH2.C.TEXT,
+                                      corner_radius=TH2.RADIUS_MD)
+        self._txt_note.config = self._txt_note.configure
+        self._txt_note.pack(side="left")
+
+        # Boutons
+        btns = ctk.CTkFrame(corps_detail, fg_color=TH2.C.SURFACE)
+        btns.pack(fill="x", pady=(12, 0))
+        self._btn_save = W.bouton_primaire(btns, "💾 Enregistrer",
+                                           command=self._sauvegarder,
+                                           state="disabled", width=140)
+        self._btn_save.config = self._btn_save.configure
+        self._btn_save.pack(side="left", padx=(0, 8))
+
+        self._btn_delete = ctk.CTkButton(
+            btns, text="🗑 Supprimer", command=self._supprimer_previsionnel,
+            state="disabled", width=130, corner_radius=TH2.RADIUS_MD, height=38,
+            fg_color="transparent", hover_color=TH2.C.SURFACE_2,
+            text_color=TH2.C.DANGER, border_color=TH2.C.DANGER,
+            border_width=1, font=TH2.FONT_BODY)
+        self._btn_delete.config = self._btn_delete.configure
+        self._btn_delete.pack(side="left")
+
+        # Label status (tk.Label car la logique utilise fg="green"/"red")
+        self._lbl_status = tk.Label(corps_detail, text="", font=TH2.FONT_SMALL,
+                                    bg=TH2.C.SURFACE, fg=TH2.C.TEXT_3)
+        self._lbl_status.pack(pady=(6, 0))
+
+        self.after(200, self._init_navigation)
+
+
 class PageEmployeurs(OngletEmployeurs):
     """Onglet Employeurs refondu (Soft UI). Logique 100% héritée."""
 
@@ -531,7 +725,7 @@ class FenetreV2(FenetrePrincipale):
         self.tab_suivi      = self._page_hote("suivi",      OngletSuivi,  cfg=True)
         self.tab_recap      = self._page_refonte("recap",   PageRecap,    cfg=True)
         self.tab_scan       = self._page_hote("scan",       OngletScan,   cfg=True)
-        self.tab_historique = self._page_hote("historique", OngletHistorique, cfg=True)
+        self.tab_historique = self._page_refonte("historique", PageHistorique, cfg=True)
 
         self._harmoniser_onglets()
         self._afficher_page("analyse")
@@ -550,7 +744,7 @@ class FenetreV2(FenetrePrincipale):
             TH._appliquer_options_tk(self, p)
             # Onglets pas encore refondus uniquement (les pages CTk gèrent leurs couleurs)
             for onglet in (self.tab_calcul, self.tab_suivi,
-                           self.tab_scan, self.tab_historique):
+                           self.tab_scan):
                 TH._recolorer_widgets(onglet, p)
         except Exception:
             pass
