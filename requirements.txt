@@ -5,3 +5,4 @@ anthropic>=0.40.0
 tkinterdnd2>=0.3.0
 tkcalendar>=1.6.1
 sv_ttk>=2.6.1
+customtkinter>=5.2.2
