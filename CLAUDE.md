@@ -116,3 +116,57 @@ D:\document pro\intermitent\
 - `sv_ttk` : ne jamais appeler `sv_ttk.set_theme()` dans `option_add("*", ...)` — utiliser des sélecteurs de classe précis pour éviter les ralentissements
 - `option_add("*", ...)` avec wildcard est très lent — toujours cibler une classe spécifique
 - `_iid_index` dans OngletHistorique doit être rebuild via `enumerate` (pas `len()-1`) après chaque insert dans le Treeview
+
+---
+
+## CHANTIER EN COURS — Refonte UI (branche `refonte-ui`)
+
+### Objectif
+Remplacer le Notebook tk classique par une UI moderne Soft UI crème/teal,
+inspirée des références Figma (@design.deb). L'application se lance avec `python _run_v2.py`.
+**Ne pas pousser sur GitHub avant validation locale complète.**
+
+### Fichiers ajoutés (refonte uniquement)
+- `theme_v2.py` — design tokens v2 (palettes dict, `C = _Colors()`, `appliquer(nom)`)
+- `widgets_v2.py` — composants CTk : `Card`, `KPICard`, `bouton_primaire/secondaire`, `LoaderFondu/Anneau/Points`
+- `ui_v2.py` — `FenetreV2(FenetrePrincipale)` : sidebar + pages refondues (logique 100% héritée)
+- `_run_v2.py` — lanceur de dev (`from ui_v2 import lancer; lancer()`)
+- `_demo_loaders.py` — démo isolée des loaders animés (ignoré par git)
+
+### Architecture de la refonte (pattern clé)
+```
+FenetreV2(FenetrePrincipale)
+  ├── _page_refonte("cle", PageXxx)   → CTk natif, gère ses couleurs
+  └── _page_hote("cle", OngletXxx)   → onglet tk existant, recoloré par _harmoniser_onglets()
+```
+- `_harmoniser_onglets()` : applique la palette figma (via `theme.py`) à tous les onglets tk legacy
+  et tous les dialogues tk créés ensuite (Édition, Aperçu, Paramètres…) héritent crème/teal automatiquement
+- Boutons CTk : `.config = .configure` pour compat avec logique héritée qui appelle `.config(state=…)`
+
+### État d'avancement des pages
+
+| Page            | Classe dans ui_v2.py          | Statut          |
+|-----------------|-------------------------------|-----------------|
+| Analyse         | (dans FenetreV2 directement)  | ✅ refondu + validé |
+| Employeurs      | `PageEmployeurs`              | ✅ refondu + validé |
+| Récapitulatif   | `PageRecap`                   | ✅ refondu + validé |
+| Historique      | `PageHistorique`              | ✅ refondu + validé |
+| Calcul AEM      | `OngletCalcul` (legacy)       | ⏳ à refondre   |
+| Suivi           | `OngletSuivi` (legacy)        | ⏳ à refondre   |
+| Scan            | `OngletScan` (legacy)         | ⏳ à refondre   |
+
+**Ordre prévu** : Scan → Suivi → Calcul
+
+### Dialogues refondus
+- `DialogueFusionEmployeursV2` — boutons packés `side="bottom"` EN PREMIER (sinon cachés)
+- `DialogueEditionV2` — deux cartes (Aperçu gauche + Infos droite), boutons en bas
+- `TableauPagesV2` — override `_ouvrir_edition()` → `DialogueEditionV2`
+
+### Pièges connus (refonte)
+- `_BaseLoader._render()` (PAS `_draw()` — conflit avec CTkFrame interne)
+- `CTkLabel` : pas de `.config` → aliaser `.config = .configure`
+- `CTkComboBox` (B majuscule) — pas `CTkCombobox`
+- `_lbl_status` dans Historique : garder `tk.Label` car la logique appelle `fg="green"/"red"` (incompatible CTkLabel)
+- Dialogues Fusion : toujours packer boutons + statut `side="bottom"` AVANT la liste expansible
+- `bouton_primaire/secondaire` : utiliser `kwargs.setdefault()` pour height/font (surchargeables)
+- Palette figma theme_v2 : BG="#F4F0E6", SIDEBAR="#EFEADC", PRIMARY="#16504A", ON_PRIMARY="#F2EEDF"
