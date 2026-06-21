@@ -54,6 +54,19 @@ _PALETTES: dict[str, dict] = {
         "BTN_FG":         "#E8E8E8",
         "SV_TTK_THEME":   "dark",
     },
+    "figma": {                             # Soft UI crème/teal (refonte v2)
+        "SURFACE":        "#F4F0E6",
+        "SURFACE_SUBTLE": "#EFEADC",
+        "BORDER":         "#DED6C2",
+        "TEXT_PRIMARY":   "#23221E",
+        "TEXT_SECONDARY": "#5C584C",
+        "TEXT_MUTED":     "#8A8675",
+        "TEXT_DISABLED":  "#B0AC9C",
+        "BTN_SURFACE":    "#16504A",
+        "BTN_HOVER":      "#0F3F39",
+        "BTN_FG":         "#F2EEDF",
+        "SV_TTK_THEME":   "light",
+    },
     # --- Color combos from @design.deb batch 1 ---
     "bourgogne": {                         # Deep Burgundy + Golden Sand
         "SURFACE":        "#3D0A0E",
@@ -403,22 +416,28 @@ def _patch_ttk_style(p: dict) -> None:
               background=[("active", p["BTN_HOVER"])],
               foreground=[("disabled", p["TEXT_DISABLED"])])
 
+    sel = p.get("BTN_SURFACE", PRIMARY)
+    onsel = p.get("BTN_FG", "white")
     style.configure("Treeview",
-                    rowheight=26,
-                    font=("Segoe UI", 9),
+                    rowheight=30,
+                    font=("Segoe UI", 10),
                     background=surf,
                     fieldbackground=surf,
-                    foreground=text)
+                    foreground=text,
+                    borderwidth=0,
+                    relief="flat")
     style.configure("Treeview.Heading",
                     font=("Segoe UI", 9, "bold"),
-                    padding=(4, 4),
+                    padding=(8, 7),
                     background=sub,
                     foreground=text,
                     relief="flat")
-    style.map("Treeview.Heading", relief=[("active", "flat")])
+    style.map("Treeview.Heading",
+              relief=[("active", "flat")],
+              background=[("active", sub)])
     style.map("Treeview",
-              background=[("selected", PRIMARY)],
-              foreground=[("selected", "white")])
+              background=[("selected", sel)],
+              foreground=[("selected", onsel)])
 
     style.configure("TNotebook",     background=sub)
     style.configure("TNotebook.Tab", font=("Segoe UI", 9), padding=(12, 6),

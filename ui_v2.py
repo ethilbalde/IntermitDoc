@@ -51,6 +51,10 @@ class FenetreV2(FenetrePrincipale):
         TH2.appliquer("figma")
         super().__init__()
 
+    def _construire_menu(self):
+        """Override : pas de barre de menus tk (remplacée par la sidebar)."""
+        pass
+
     # ------------------------------------------------------------------
     # Construction de l'interface (override complet)
     # ------------------------------------------------------------------
@@ -86,7 +90,23 @@ class FenetreV2(FenetrePrincipale):
         self.tab_scan       = self._page_hote("scan",       OngletScan,   cfg=True)
         self.tab_historique = self._page_hote("historique", OngletHistorique, cfg=True)
 
+        self._harmoniser_onglets()
         self._afficher_page("analyse")
+
+    def _harmoniser_onglets(self):
+        """Recolore les onglets tk existants en palette 'figma' (crème/teal),
+        sans toucher au shell customtkinter."""
+        import theme as TH
+        try:
+            TH._THEME_COURANT = "figma"
+            p = TH._palette()
+            TH._update_globals(p)
+            TH._patch_ttk_style(p)
+            for onglet in (self.tab_employeurs, self.tab_calcul, self.tab_suivi,
+                           self.tab_recap, self.tab_scan, self.tab_historique):
+                TH._recolorer_widgets(onglet, p)
+        except Exception:
+            pass
 
     def _page_hote(self, cle: str, Classe, cfg: bool = False):
         """Crée une page-hôte CTk contenant un onglet tk existant."""
@@ -124,16 +144,27 @@ class FenetreV2(FenetrePrincipale):
             b.pack(fill="x", padx=10, pady=2)
             self._nav_btns[cle] = b
 
-        # Bas de sidebar : thème + paramètres
+        # Bas de sidebar : outils + thème
         bas = ctk.CTkFrame(bar, fg_color="transparent")
         bas.pack(side="bottom", fill="x", padx=10, pady=12)
-        ctk.CTkButton(
-            bas, text="  ⚙   Paramètres", anchor="w",
-            corner_radius=TH2.RADIUS_MD, height=34,
-            fg_color="transparent", hover_color=TH2.C.SURFACE_2,
-            text_color=TH2.C.TEXT_2, font=TH2.FONT_LABEL,
-            command=self._ouvrir_parametres,
-        ).pack(fill="x", pady=2)
+
+        outils = [
+            ("⊞  Boost IA",        self._ouvrir_boost_ia),
+            ("⊕  Créer dossiers",  self._creer_dossiers),
+            ("↻  Mises à jour",    self._ouvrir_mises_a_jour),
+            ("⚙  Paramètres",      self._ouvrir_parametres),
+        ]
+        for libelle, cmd in outils:
+            ctk.CTkButton(
+                bas, text=f"  {libelle}", anchor="w",
+                corner_radius=TH2.RADIUS_MD, height=32,
+                fg_color="transparent", hover_color=TH2.C.SURFACE_2,
+                text_color=TH2.C.TEXT_2, font=TH2.FONT_LABEL,
+                command=cmd,
+            ).pack(fill="x", pady=1)
+
+        ctk.CTkLabel(bas, text=f"v{__import__('version').__version__}",
+                     font=TH2.FONT_SMALL, text_color=TH2.C.TEXT_3).pack(pady=(10, 0))
 
     def _afficher_page(self, cle: str):
         page = self._pages.get(cle)
