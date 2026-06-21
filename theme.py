@@ -25,6 +25,7 @@ _PALETTES: dict[str, dict] = {
         "TEXT_DISABLED":  "#9E9E9E",
         "BTN_SURFACE":    "#EEEEEE",
         "BTN_HOVER":      "#E0E0E0",
+        "BTN_FG":         "#212121",
         "SV_TTK_THEME":   "light",
     },
     "medium": {
@@ -37,6 +38,7 @@ _PALETTES: dict[str, dict] = {
         "TEXT_DISABLED":  "#999999",
         "BTN_SURFACE":    "#D4D0C8",
         "BTN_HOVER":      "#C4C0B8",
+        "BTN_FG":         "#1A1A1A",
         "SV_TTK_THEME":   "light",
     },
     "sombre": {
@@ -49,9 +51,10 @@ _PALETTES: dict[str, dict] = {
         "TEXT_DISABLED":  "#666666",
         "BTN_SURFACE":    "#4E4E4E",
         "BTN_HOVER":      "#5E5E5E",
+        "BTN_FG":         "#E8E8E8",
         "SV_TTK_THEME":   "dark",
     },
-    # --- Color combos from @design.deb ---
+    # --- Color combos from @design.deb batch 1 ---
     "bourgogne": {                         # Deep Burgundy + Golden Sand
         "SURFACE":        "#3D0A0E",
         "SURFACE_SUBTLE": "#5B0E14",
@@ -60,8 +63,9 @@ _PALETTES: dict[str, dict] = {
         "TEXT_SECONDARY": "#D4C060",
         "TEXT_MUTED":     "#988840",
         "TEXT_DISABLED":  "#685E30",
-        "BTN_SURFACE":    "#6A1515",
-        "BTN_HOVER":      "#821C1C",
+        "BTN_SURFACE":    "#8A1A1A",
+        "BTN_HOVER":      "#A82020",
+        "BTN_FG":         "#F1E194",
         "SV_TTK_THEME":   "dark",
     },
     "violet": {                            # Lemon Chiffon + Ultra Violet
@@ -72,8 +76,9 @@ _PALETTES: dict[str, dict] = {
         "TEXT_SECONDARY": "#5F4A8B",
         "TEXT_MUTED":     "#8070A8",
         "TEXT_DISABLED":  "#A898C0",
-        "BTN_SURFACE":    "#E0D478",
-        "BTN_HOVER":      "#CCBC58",
+        "BTN_SURFACE":    "#6A50B8",
+        "BTN_HOVER":      "#5A40A8",
+        "BTN_FG":         "#FEFACD",
         "SV_TTK_THEME":   "light",
     },
     "citrouille": {                        # Pumpkin + Charcoal
@@ -86,6 +91,7 @@ _PALETTES: dict[str, dict] = {
         "TEXT_DISABLED":  "#4A6070",
         "BTN_SURFACE":    "#FD802E",
         "BTN_HOVER":      "#E87020",
+        "BTN_FG":         "#1A2E3A",
         "SV_TTK_THEME":   "dark",
     },
     "ocean": {                             # Cloudy Sky + Ocean Blue
@@ -96,21 +102,23 @@ _PALETTES: dict[str, dict] = {
         "TEXT_SECONDARY": "#2872A1",
         "TEXT_MUTED":     "#5898B8",
         "TEXT_DISABLED":  "#90B0C8",
-        "BTN_SURFACE":    "#A8C8D8",
-        "BTN_HOVER":      "#90B8CC",
+        "BTN_SURFACE":    "#2872A1",
+        "BTN_HOVER":      "#186090",
+        "BTN_FG":         "#FFFFFF",
         "SV_TTK_THEME":   "light",
     },
-    # --- Second batch from @design.deb ---
+    # --- Color combos from @design.deb batch 2 ---
     "tiffany": {                           # Combo 01 — Dark Gray + Tiffany mint
         "SURFACE":        "#171717",
-        "SURFACE_SUBTLE": "#222222",
+        "SURFACE_SUBTLE": "#252525",
         "BORDER":         "#2E4A3E",
         "TEXT_PRIMARY":   "#21F1A8",
         "TEXT_SECONDARY": "#18C888",
-        "TEXT_MUTED":     "#108860",
-        "TEXT_DISABLED":  "#0A5040",
-        "BTN_SURFACE":    "#1A3D32",
-        "BTN_HOVER":      "#224D40",
+        "TEXT_MUTED":     "#10A060",
+        "TEXT_DISABLED":  "#0A6040",
+        "BTN_SURFACE":    "#1A5A42",
+        "BTN_HOVER":      "#207050",
+        "BTN_FG":         "#21F1A8",
         "SV_TTK_THEME":   "dark",
     },
     "corail": {                            # Combo 02 — Chill White + True Pink
@@ -118,11 +126,12 @@ _PALETTES: dict[str, dict] = {
         "SURFACE_SUBTLE": "#FFE8ED",
         "BORDER":         "#FFB0C0",
         "TEXT_PRIMARY":   "#C00830",
-        "TEXT_SECONDARY": "#E01040",
-        "TEXT_MUTED":     "#C84060",
+        "TEXT_SECONDARY": "#A00828",
+        "TEXT_MUTED":     "#B84060",
         "TEXT_DISABLED":  "#D88090",
         "BTN_SURFACE":    "#FD1843",
         "BTN_HOVER":      "#E01035",
+        "BTN_FG":         "#FFFFFF",     # white on red — fix critique
         "SV_TTK_THEME":   "light",
     },
     "cyber": {                             # Combo 03 — Charcoal Violet + Cyber Lime
@@ -133,20 +142,22 @@ _PALETTES: dict[str, dict] = {
         "TEXT_SECONDARY": "#90D000",
         "TEXT_MUTED":     "#68A000",
         "TEXT_DISABLED":  "#486800",
-        "BTN_SURFACE":    "#5C2870",
-        "BTN_HOVER":      "#742E8A",
+        "BTN_SURFACE":    "#6A3890",
+        "BTN_HOVER":      "#7A48A8",
+        "BTN_FG":         "#B6FF00",
         "SV_TTK_THEME":   "dark",
     },
     "chypre": {                            # Combo 04 — Cyprus teal + Sand beige
         "SURFACE":        "#004741",
-        "SURFACE_SUBTLE": "#00564E",
-        "BORDER":         "#007060",
+        "SURFACE_SUBTLE": "#005850",
+        "BORDER":         "#007868",
         "TEXT_PRIMARY":   "#F0EDE4",
         "TEXT_SECONDARY": "#C8C5BC",
         "TEXT_MUTED":     "#909085",
         "TEXT_DISABLED":  "#606055",
-        "BTN_SURFACE":    "#006858",
-        "BTN_HOVER":      "#008070",
+        "BTN_SURFACE":    "#00A888",
+        "BTN_HOVER":      "#00C0A0",
+        "BTN_FG":         "#003830",
         "SV_TTK_THEME":   "dark",
     },
     "limon": {                             # Combo 05 — Lime Sprout + Fresh Canopy
@@ -155,10 +166,11 @@ _PALETTES: dict[str, dict] = {
         "BORDER":         "#A8C860",
         "TEXT_PRIMARY":   "#2D3E2C",
         "TEXT_SECONDARY": "#3E5438",
-        "TEXT_MUTED":     "#5A7050",
-        "TEXT_DISABLED":  "#809870",
-        "BTN_SURFACE":    "#C0E870",
-        "BTN_HOVER":      "#A8D458",
+        "TEXT_MUTED":     "#607850",
+        "TEXT_DISABLED":  "#80A070",
+        "BTN_SURFACE":    "#6A9828",
+        "BTN_HOVER":      "#588020",
+        "BTN_FG":         "#FFFFFF",
         "SV_TTK_THEME":   "light",
     },
     "menthe": {                            # Combo 06 — Milky white + Mantis green
@@ -167,58 +179,63 @@ _PALETTES: dict[str, dict] = {
         "BORDER":         "#C0E8A0",
         "TEXT_PRIMARY":   "#2A5A20",
         "TEXT_SECONDARY": "#3A7828",
-        "TEXT_MUTED":     "#59C749",
-        "TEXT_DISABLED":  "#90D080",
-        "BTN_SURFACE":    "#59C749",
-        "BTN_HOVER":      "#48B038",
+        "TEXT_MUTED":     "#7AB868",
+        "TEXT_DISABLED":  "#A0D090",
+        "BTN_SURFACE":    "#48B038",
+        "BTN_HOVER":      "#389828",
+        "BTN_FG":         "#FFFDF1",
         "SV_TTK_THEME":   "light",
     },
     "curcuma": {                           # Combo 07 — Malt dark + Turmeric gold
         "SURFACE":        "#2A2312",
-        "SURFACE_SUBTLE": "#3A3218",
+        "SURFACE_SUBTLE": "#3C3218",
         "BORDER":         "#584820",
         "TEXT_PRIMARY":   "#FFBE0B",
         "TEXT_SECONDARY": "#E0A000",
         "TEXT_MUTED":     "#A87800",
         "TEXT_DISABLED":  "#705000",
-        "BTN_SURFACE":    "#4A3C10",
-        "BTN_HOVER":      "#605010",
+        "BTN_SURFACE":    "#FFBE0B",
+        "BTN_HOVER":      "#E0A800",
+        "BTN_FG":         "#2A2312",
         "SV_TTK_THEME":   "dark",
     },
     "silver": {                            # Combo 08 — Silver black + Luminous Moss
         "SURFACE":        "#141414",
-        "SURFACE_SUBTLE": "#1E1E1E",
+        "SURFACE_SUBTLE": "#222222",
         "BORDER":         "#2A3A2A",
         "TEXT_PRIMARY":   "#2BEE34",
         "TEXT_SECONDARY": "#20C828",
         "TEXT_MUTED":     "#18A020",
         "TEXT_DISABLED":  "#0E6814",
-        "BTN_SURFACE":    "#183A18",
-        "BTN_HOVER":      "#204A20",
+        "BTN_SURFACE":    "#1A5A20",
+        "BTN_HOVER":      "#207028",
+        "BTN_FG":         "#2BEE34",
         "SV_TTK_THEME":   "dark",
     },
     "volcan": {                            # Combo 09 — Noturno navy + Vulcanico red
         "SURFACE":        "#001621",
-        "SURFACE_SUBTLE": "#002030",
-        "BORDER":         "#003048",
+        "SURFACE_SUBTLE": "#002538",
+        "BORDER":         "#003858",
         "TEXT_PRIMARY":   "#FF4103",
         "TEXT_SECONDARY": "#E03800",
         "TEXT_MUTED":     "#A02800",
         "TEXT_DISABLED":  "#681800",
-        "BTN_SURFACE":    "#003050",
-        "BTN_HOVER":      "#004068",
+        "BTN_SURFACE":    "#FF4103",
+        "BTN_HOVER":      "#E03800",
+        "BTN_FG":         "#001621",
         "SV_TTK_THEME":   "dark",
     },
     "nacre": {                             # Combo 10 — Skin Tone peach + Bridal wine
         "SURFACE":        "#FFF0E8",
         "SURFACE_SUBTLE": "#FFE0D0",
-        "BORDER":         "#FFBEA0",
+        "BORDER":         "#E8B090",
         "TEXT_PRIMARY":   "#741A2F",
         "TEXT_SECONDARY": "#9A2040",
-        "TEXT_MUTED":     "#C04060",
-        "TEXT_DISABLED":  "#D88090",
-        "BTN_SURFACE":    "#FFC6A8",
-        "BTN_HOVER":      "#FFB090",
+        "TEXT_MUTED":     "#B85060",
+        "TEXT_DISABLED":  "#D08090",
+        "BTN_SURFACE":    "#A02840",
+        "BTN_HOVER":      "#881E34",
+        "BTN_FG":         "#FFF0E8",
         "SV_TTK_THEME":   "light",
     },
 }
@@ -293,6 +310,7 @@ TEXT_MUTED      = "#888888"
 TEXT_DISABLED   = "#9E9E9E"
 BTN_SURFACE     = "#EEEEEE"
 BTN_HOVER       = "#E0E0E0"
+BTN_FG          = "#212121"
 BTN_NEUTRAL     = (SURFACE, TEXT_PRIMARY)
 
 # ---------------------------------------------------------------------------
@@ -326,7 +344,7 @@ def _update_globals(p: dict) -> None:
     g = globals()
     for key in ("SURFACE", "SURFACE_SUBTLE", "BORDER",
                 "TEXT_PRIMARY", "TEXT_SECONDARY", "TEXT_MUTED", "TEXT_DISABLED",
-                "BTN_SURFACE", "BTN_HOVER"):
+                "BTN_SURFACE", "BTN_HOVER", "BTN_FG"):
         g[key] = p[key]
     g["BTN_NEUTRAL"] = (p["SURFACE"], p["TEXT_PRIMARY"])
 
@@ -337,6 +355,7 @@ def _appliquer_options_tk(root: tk.Misc, p: dict) -> None:
     text = p["TEXT_PRIMARY"]
     btn  = p["BTN_SURFACE"]
     bhov = p["BTN_HOVER"]
+    bfg  = p["BTN_FG"]
     bord = p["BORDER"]
 
     for cls in ("Frame", "Label", "Canvas", "Toplevel", "LabelFrame"):
@@ -353,9 +372,9 @@ def _appliquer_options_tk(root: tk.Misc, p: dict) -> None:
 
     root.option_add("*Button.relief",           "flat", "interactive")
     root.option_add("*Button.background",       btn,   "interactive")
-    root.option_add("*Button.foreground",       text,  "interactive")
+    root.option_add("*Button.foreground",       bfg,   "interactive")
     root.option_add("*Button.activeBackground", bhov,  "interactive")
-    root.option_add("*Button.activeForeground", text,  "interactive")
+    root.option_add("*Button.activeForeground", bfg,   "interactive")
     root.option_add("*Button.padX",             "10",  "interactive")
     root.option_add("*Button.padY",             "5",   "interactive")
     root.option_add("*Button.cursor",           "hand2", "interactive")
@@ -371,6 +390,7 @@ def _patch_ttk_style(p: dict) -> None:
     sub   = p["SURFACE_SUBTLE"]
     text  = p["TEXT_PRIMARY"]
     bsrf  = p["BTN_SURFACE"]
+    bfg   = p["BTN_FG"]
 
     style = ttk.Style()
 
@@ -378,7 +398,7 @@ def _patch_ttk_style(p: dict) -> None:
     style.configure("TLabel",       background=surf, foreground=text)
     style.configure("TLabelframe",  background=surf, foreground=text)
     style.configure("TLabelframe.Label", background=surf, foreground=text)
-    style.configure("TButton",      background=bsrf, foreground=text, relief="flat", padding=(8, 4))
+    style.configure("TButton",      background=bsrf, foreground=bfg, relief="flat", padding=(8, 4))
     style.map("TButton",
               background=[("active", p["BTN_HOVER"])],
               foreground=[("disabled", p["TEXT_DISABLED"])])
@@ -418,6 +438,7 @@ def _recolorer_widgets(widget: tk.Misc, p: dict) -> None:
     surf = p["SURFACE"]
     text = p["TEXT_PRIMARY"]
     btn  = p["BTN_SURFACE"]
+    bfg  = p["BTN_FG"]
 
     cls = widget.winfo_class()
 
@@ -448,7 +469,8 @@ def _recolorer_widgets(widget: tk.Misc, p: dict) -> None:
             _btn_tokens = {p["BTN_SURFACE"] for p in _PALETTES.values()}
             _surf_tokens = {p["SURFACE"] for p in _PALETTES.values()}
             if current_bg in _btn_tokens | _surf_tokens:
-                widget.configure(bg=btn, fg=text, activebackground=p["BTN_HOVER"])
+                widget.configure(bg=btn, fg=bfg, activebackground=p["BTN_HOVER"],
+                                 activeforeground=bfg)
         except tk.TclError:
             pass
     elif cls == "Entry":
