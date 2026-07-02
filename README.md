@@ -6,28 +6,74 @@ journalière selon les formules officielles France Travail.
 
 **Aucune compétence technique requise** : téléchargez, dézippez, lancez.
 
+## Fournisseurs IA supportés
+
+| Fournisseur | Modèle | Qualité | Latence | Configuration |
+|---|---|---|---|---|
+| **Claude** (Anthropic) | claude-sonnet-4-6 | ⭐⭐⭐⭐⭐ Excellent français | Moyen | Défaut, recommandé |
+| OpenAI | gpt-4o | ⭐⭐⭐⭐⭐ Très bon | Rapide | Menu Outils → Boost IA |
+| Google Gemini | gemini-1.5-flash | ⭐⭐⭐⭐ Bon multilangue | Rapide | Menu Outils → Boost IA |
+| Mistral | mistral-small-latest | ⭐⭐⭐⭐ Bon, léger | ⭐ Très rapide | Menu Outils → Boost IA |
+
+Tous gratuits (forfait gratuit ou pay-as-you-go). Sans clé API, le programme classe
+par heuristiques locales (plus lent, moins précis).
+
 ---
 
 ## 📥 Installation (utilisateur)
+
+### Utilisateur final — exe compilé (recommandé)
 
 1. Téléchargez le zip `IntermitDoc-vX.Y.Z-win64.zip` depuis la page
    [Releases](https://github.com/ethilbalde/IntermitDoc/releases/latest)
 2. Dézippez le dossier où vous voulez (ex : `C:\IntermitDoc`)
 3. Lancez `IntermitDoc.exe`
 
-Aucune installation de Python n'est nécessaire. Windows 10/11 uniquement.
+**Aucune installation de Python n'est nécessaire.** Windows 10/11 uniquement.
 
-### Premier lancement
+### Développeur — depuis les sources
+
+Installez d'abord Python 3.10+ :
+- **Windows** : [python.org](https://www.python.org/downloads/) → téléchargez le .exe
+  (cochez « Add Python to PATH ») ou via [Microsoft Store](https://apps.microsoft.com/detail/9NRWMJP3717K)
+- **Vérification** : `python --version` dans une console doit afficher 3.10 ou +
+
+Puis :
+```bash
+pip install -r requirements.txt
+python main.py
+```
+
+### Premier lancement — configuration
 
 Au premier démarrage, le programme vous demande :
 
-- **Votre clé API IA** (optionnelle mais recommandée) — l'analyse automatique des PDF
-  utilise une IA. Créez une clé sur [console.anthropic.com](https://console.anthropic.com)
-  (Claude), ou configurez OpenAI / Gemini / Mistral dans **Outils → Boost IA**.
+- **Votre clé API IA** — obligatoire pour l'analyse automatique des PDF.
+  - **Claude (Anthropic)** est le fournisseur par défaut, **recommandé** pour les
+    documents français. Créez une clé gratuite sur
+    [console.anthropic.com](https://console.anthropic.com).
+  - **Alternative** : OpenAI (GPT-4o), Google Gemini, ou Mistral. Configurables dans
+    **Outils → Boost IA** — chacun a ses forces (Gemini pour le multilangue, Mistral
+    pour la latence faible, OpenAI pour une qualité max).
+  - **Aucune clé ?** Le programme tourne quand même : les documents seront classifiés
+    par heuristiques locales (détection de mots-clés). Analyse manuelle plus lente,
+    mais possible.
 - **Votre annexe** : **8** (technicien), **10** (artiste) ou **8+10** — elle pilote
   les formules de calcul de votre allocation.
 - **Votre dossier de classement** : là où les PDF classés seront rangés.
 - **Votre date anniversaire** ARE (JJ/MM) pour le calcul automatique de votre période.
+
+> **Et Tesseract OCR ?** Le programme cherche Tesseract au chemin par défaut
+> (`C:\Program Files\Tesseract-OCR\tesseract.exe`). Si vous l'avez installé ailleurs,
+> deux options :
+> - (Utilisateur) Réinstallez Tesseract au chemin par défaut, ou utilisez Windows
+>   "Add/Remove Programs" pour noter le chemin, puis reconfigurer dans
+>   **Outils → Paramètres → Chemin Tesseract**.
+> - (Développeur) Éditer `config.json` : `"tesseract_path": "C:\\your\\path\\tesseract.exe"`
+>
+> **Tesseract absent ?** Aucun problème si vos PDF ont du texte (cas courant). L'OCR
+> est utile uniquement pour les images scannées sans texte intégré. Vous pouvez
+> classer des AEM, bulletins de paie, etc. sans lui.
 
 Vos réglages et données sont stockés dans `%APPDATA%\IntermitDoc\` sur **votre**
 machine — rien ne quitte votre PC (hormis le texte des PDF envoyé à l'IA pour analyse).
