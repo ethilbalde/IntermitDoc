@@ -2215,10 +2215,16 @@ class OngletSuivi(tk.Frame):
         d2 = self.var_date_fin.get().strip()
         self._stats = _calculer_stats(self._docs_tous, d1, d2)
         # Stats combinées réel + prévisionnel (pour les jauges)
-        docs_prev_comme_docs = [
-            {**p, "type": p.get("type", "PREV")}
-            for p in self._prevs
-        ]
+        # Reconstruct full ISO dates from annee+mois+day before filtering
+        docs_prev_comme_docs = []
+        for p in self._prevs:
+            d = {**p, "type": p.get("type", "AEM")}
+            a, mo, dd_raw = d.get("annee", ""), d.get("mois", ""), d.get("date_debut", "")
+            df_raw = d.get("date_fin", dd_raw)
+            if a and mo and dd_raw and len(dd_raw) == 2:
+                d["date_debut"] = f"{a}-{mo}-{dd_raw}"
+                d["date_fin"] = f"{a}-{mo}-{df_raw}" if df_raw and len(df_raw) == 2 else d["date_debut"]
+            docs_prev_comme_docs.append(d)
         self._stats_prev = _calculer_stats(
             self._docs_tous + docs_prev_comme_docs, d1, d2
         )
@@ -2418,13 +2424,18 @@ class OngletSuivi(tk.Frame):
             try: total_s += float(d["salaire"])
             except (ValueError, TypeError): pass
 
-        # Prévisionnels sur la période
+        # Prévisionnels sur la période — reconstruct full ISO dates before filtering
         d1 = self.var_date_debut.get().strip()
         d2 = self.var_date_fin.get().strip()
-        prevs_periode = [
-            p for p in self._prevs
-            if p.get("date_debut", "") >= d1 and p.get("date_fin", p.get("date_debut", "")) <= d2
-        ]
+        prevs_periode = []
+        for p in self._prevs:
+            a, mo = p.get("annee", ""), p.get("mois", "")
+            dd_raw = p.get("date_debut", "")
+            df_raw = p.get("date_fin", dd_raw)
+            dd = f"{a}-{mo}-{dd_raw}" if (a and mo and dd_raw and len(dd_raw) == 2) else dd_raw
+            df = f"{a}-{mo}-{df_raw}" if (a and mo and df_raw and len(df_raw) == 2) else dd
+            if dd >= d1 and df <= d2:
+                prevs_periode.append(p)
         if prevs_periode:
             self.tree.insert("", tk.END, values=(
                 "── Prévisionnel ──", "", "", "", "", "",
