@@ -2386,19 +2386,40 @@ class OngletSuivi(tk.Frame):
 
     def _afficher_chiffres(self):
         s  = self._stats
-        sp = self._stats_prev
-        h_prev = sp.get("total_heures",  s.get("total_heures", 0))
-        s_prev = sp.get("total_salaire", s.get("total_salaire", 0))
+        sp = self._stats_prev or s
+        h_reel = s.get("total_heures", 0)
+        h_prev = sp.get("total_heures", h_reel)
+        sal_reel = s.get("total_salaire", 0)
+        sal_prev = sp.get("total_salaire", sal_reel)
         manquantes = s.get("manquantes", 0)
+        manq_prev  = sp.get("manquantes", manquantes)
 
-        # Compact values for KPI tiles (no redundant "réel"/"prévi" noise)
+        def _avec_prev(reel_txt: str, reel_val, prev_val, prev_txt: str) -> str:
+            """Append forecast value (⏳) when it differs from actual."""
+            if abs(float(prev_val) - float(reel_val)) < 0.01:
+                return reel_txt
+            return f"{reel_txt}  ⏳ {prev_txt}"
+
         mises_a_jour = {
-            "heures":     f"{s.get('total_heures', 0):.1f} h",
-            "manquantes": f"{manquantes:.0f} h" if manquantes > 0 else "0 h  ✓",
-            "salaire":    f"{s.get('total_salaire', 0):.0f} €",
-            "sjr":        f"{s.get('sjr', 0):.2f} €/j",
-            "aj":         f"~{s.get('aj_estime', 0):.2f} €/j",
-            "nb_docs":    str(s.get("nb_docs", 0)),
+            "heures":     _avec_prev(f"{h_reel:.1f} h", h_reel, h_prev,
+                                     f"{h_prev:.1f} h"),
+            "manquantes": _avec_prev(
+                f"{manquantes:.0f} h" if manquantes > 0 else "0 h  ✓",
+                manquantes, manq_prev,
+                f"{manq_prev:.0f} h" if manq_prev > 0 else "0 h ✓"),
+            "salaire":    _avec_prev(f"{sal_reel:.0f} €", sal_reel, sal_prev,
+                                     f"{sal_prev:.0f} €"),
+            "sjr":        _avec_prev(f"{s.get('sjr', 0):.2f} €/j",
+                                     s.get("sjr", 0), sp.get("sjr", s.get("sjr", 0)),
+                                     f"{sp.get('sjr', 0):.2f}"),
+            "aj":         _avec_prev(f"~{s.get('aj_estime', 0):.2f} €/j",
+                                     s.get("aj_estime", 0),
+                                     sp.get("aj_estime", s.get("aj_estime", 0)),
+                                     f"~{sp.get('aj_estime', 0):.2f}"),
+            "nb_docs":    _avec_prev(str(s.get("nb_docs", 0)),
+                                     s.get("nb_docs", 0),
+                                     sp.get("nb_docs", s.get("nb_docs", 0)),
+                                     str(sp.get("nb_docs", 0))),
         }
         for key, val in mises_a_jour.items():
             lbl = self._labels_chiffres.get(key)
