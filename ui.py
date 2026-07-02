@@ -2209,6 +2209,10 @@ class OngletSuivi(tk.Frame):
         else:
             self._recalculer()
 
+    def _reset_dedup(self):
+        global _dedup_en_cours
+        _dedup_en_cours = False
+
     def _recalculer(self):
         """Recalcule les stats réel + prévisionnel et met à jour l'UI."""
         d1 = self.var_date_debut.get().strip()
