@@ -5694,6 +5694,23 @@ class FenetrePrincipale(TkinterDnD.Tk if DND_DISPONIBLE else tk.Tk):
         self.tab_historique = OngletHistorique(self.notebook, cfg_getter=lambda: self.cfg)
         self.notebook.add(self.tab_historique, text="  Historique  ")
 
+        # Auto-refresh Suivi / Récap when their tab is selected
+        self.notebook.bind("<<NotebookTabChanged>>", self._on_changement_onglet)
+
+    def _on_changement_onglet(self, _event=None):
+        """Refresh contract data when Suivi or Récap tab becomes visible."""
+        try:
+            onglet = self.notebook.nametowidget(self.notebook.select())
+        except (tk.TclError, KeyError):
+            return
+        # Skip auto-refresh when no folder is configured (avoids warning popup)
+        if not self.cfg.get("dossier_base", "").strip():
+            return
+        if onglet is self.tab_suivi:
+            self.tab_suivi._actualiser()
+        elif onglet is self.tab_recap:
+            self.tab_recap.actualiser()
+
     def _construire_onglet_analyse(self, parent):
         # Zone de drop
         frame_drop = tk.Frame(parent, pady=4)
