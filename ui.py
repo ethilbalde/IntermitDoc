@@ -1285,10 +1285,15 @@ def _calculer_stats(docs: list, date_debut_str: str, date_fin_str: str) -> dict:
     nb_jours = max(1, (d_fin - d_debut).days + 1)
     sjr = total_salaire / nb_jours if total_salaire else 0.0
 
-    # Estimation allocation journalière : 0.312 × SJR + 11.84 EUR, plafonnée à 75% SJR
-    aj_brut    = 0.312 * sjr + 11.84
-    aj_plafond = 0.75 * sjr
-    aj_estime  = min(aj_brut, aj_plafond) if sjr else 0.0
+    # Estimation allocation journalière : formule officielle intermittents
+    # A+B+C (annexe 8) — alignée sur DialogueCalculARE et tauxintermittent.net
+    if total_heures or total_salaire:
+        _params = DialogueCalculARE.ANNEXE_PARAMS["8"]
+        aj_estime, _pa, _pb, _pc = DialogueCalculARE._calc_aj_brute(
+            total_heures, total_salaire, "8", _params,
+            DialogueCalculARE.AJ_MIN, DialogueCalculARE.PLAFOND_AJ)
+    else:
+        aj_estime = 0.0
 
     return {
         "docs_periode":    docs_periode,
