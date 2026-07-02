@@ -1237,10 +1237,12 @@ def _scanner_tous_docs(dossier_base: str) -> list:
     return sorted(vus.values(), key=lambda x: x["date_debut"])
 
 
-def _calculer_stats(docs: list, date_debut_str: str, date_fin_str: str) -> dict:
+def _calculer_stats(docs: list, date_debut_str: str, date_fin_str: str,
+                    annexe: str = "8") -> dict:
     """
     Filtre les docs sur la période et calcule heures, salaires, SJR, employeurs.
     Seuls les AEM comptent pour les heures ; AEM + BP pour les salaires.
+    `annexe` : "8", "10" ou "8+10" — pilote la formule d'allocation journalière.
     """
     try:
         d_debut = _date_today.fromisoformat(date_debut_str)
@@ -1286,12 +1288,19 @@ def _calculer_stats(docs: list, date_debut_str: str, date_fin_str: str) -> dict:
     sjr = total_salaire / nb_jours if total_salaire else 0.0
 
     # Estimation allocation journalière : formule officielle intermittents
-    # A+B+C (annexe 8) — alignée sur DialogueCalculARE et tauxintermittent.net
+    # A+B+C — alignée sur DialogueCalculARE et tauxintermittent.net.
+    # Pour "8+10" on calcule les deux annexes et on retient la plus favorable
+    # (le détail par annexe reste visible dans le dialogue Calculer ARE).
     if total_heures or total_salaire:
-        _params = DialogueCalculARE.ANNEXE_PARAMS["8"]
-        aj_estime, _pa, _pb, _pc = DialogueCalculARE._calc_aj_brute(
-            total_heures, total_salaire, "8", _params,
-            DialogueCalculARE.AJ_MIN, DialogueCalculARE.PLAFOND_AJ)
+        annexes = ["8", "10"] if annexe == "8+10" else \
+                  [annexe if annexe in ("8", "10") else "8"]
+        aj_estime = max(
+            DialogueCalculARE._calc_aj_brute(
+                total_heures, total_salaire, ann,
+                DialogueCalculARE.ANNEXE_PARAMS[ann],
+                DialogueCalculARE.AJ_MIN, DialogueCalculARE.PLAFOND_AJ)[0]
+            for ann in annexes
+        )
     else:
         aj_estime = 0.0
 
@@ -2222,7 +2231,8 @@ class OngletSuivi(tk.Frame):
         """Recalcule les stats réel + prévisionnel et met à jour l'UI."""
         d1 = self.var_date_debut.get().strip()
         d2 = self.var_date_fin.get().strip()
-        self._stats = _calculer_stats(self._docs_tous, d1, d2)
+        annexe = self._cfg_getter().get("annexe", "8")
+        self._stats = _calculer_stats(self._docs_tous, d1, d2, annexe=annexe)
         # Stats combinées réel + prévisionnel (pour les jauges)
         # Reconstruct full ISO dates from annee+mois+day before filtering
         docs_prev_comme_docs = []
@@ -2235,7 +2245,7 @@ class OngletSuivi(tk.Frame):
                 d["date_fin"] = f"{a}-{mo}-{df_raw}" if df_raw and len(df_raw) == 2 else d["date_debut"]
             docs_prev_comme_docs.append(d)
         self._stats_prev = _calculer_stats(
-            self._docs_tous + docs_prev_comme_docs, d1, d2
+            self._docs_tous + docs_prev_comme_docs, d1, d2, annexe=annexe
         )
         self._afficher_barre()
         self._afficher_chiffres()
