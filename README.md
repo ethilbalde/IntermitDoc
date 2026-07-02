@@ -22,14 +22,27 @@ par heuristiques locales (plus lent, moins précis).
 
 ## 📥 Installation (utilisateur)
 
-### Utilisateur final — exe compilé (recommandé)
+### Utilisateur final — installeur (recommandé)
 
-1. Téléchargez le zip `IntermitDoc-vX.Y.Z-win64.zip` depuis la page
+1. Téléchargez `IntermitDoc-Setup-X.Y.Z.exe` depuis la page
    [Releases](https://github.com/ethilbalde/IntermitDoc/releases/latest)
-2. Dézippez le dossier où vous voulez (ex : `C:\IntermitDoc`)
-3. Lancez `IntermitDoc.exe`
+2. Double-cliquez, suivez l'assistant (aucun droit administrateur requis)
+3. Le programme se lance à la fin de l'installation
 
-**Aucune installation de Python n'est nécessaire.** Windows 10/11 uniquement.
+Un raccourci est créé dans le menu Démarrer (et sur le Bureau si vous cochez
+l'option). La désinstallation se fait normalement via
+**Paramètres → Applications**, et conserve vos données (clés API, employeurs,
+contrats) en cas de réinstallation ultérieure.
+
+### Alternative — zip portable
+
+Si vous préférez ne rien installer (ex : usage depuis une clé USB) :
+
+1. Téléchargez `IntermitDoc-vX.Y.Z-win64.zip`
+2. Dézippez le dossier où vous voulez
+3. Lancez `IntermitDoc.exe` directement
+
+**Aucune installation de Python n'est nécessaire** dans les deux cas. Windows 10/11.
 
 ### Développeur — depuis les sources
 
