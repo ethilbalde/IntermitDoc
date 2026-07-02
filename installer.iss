@@ -31,6 +31,7 @@ OutputBaseFilename=IntermitDoc-Setup-{#MyAppVersion}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 LicenseFile=
 SetupLogging=yes
