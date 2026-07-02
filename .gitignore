@@ -4,6 +4,7 @@ config.json
 # Build artifacts
 dist/
 build/
+installer_output/
 *.spec.bak
 
 # Python cache
