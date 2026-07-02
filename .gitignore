@@ -7,6 +7,9 @@ build/
 installer_output/
 *.spec.bak
 
+# Binaire tiers téléchargé par installer_assets\telecharger_tesseract.ps1
+installer_assets/*.exe
+
 # Python cache
 __pycache__/
 *.py[cod]

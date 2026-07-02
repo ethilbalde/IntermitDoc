@@ -138,6 +138,11 @@ AJ minimale : 31,96 € (juillet 2023). Déductions appliquées : retraite compl
 3. Le programme se lance à la fin de l'installation
 
 Un raccourci est créé dans le menu Démarrer (et sur le Bureau si vous cochez l'option).
+L'assistant propose aussi d'installer **Tesseract OCR** (coché par défaut, ignoré
+automatiquement s'il est déjà présent) — nécessaire uniquement si vous analysez des PDF
+scannés/photographiés sans texte numérique ; vous pouvez décocher si vous n'en avez pas
+l'usage.
+
 La désinstallation se fait via **Paramètres → Applications**, et conserve vos données
 (clés API, employeurs, contrats) en cas de réinstallation ultérieure.
 
@@ -202,14 +207,19 @@ précis, mais fonctionnel.
 
 ## Tesseract OCR (optionnel)
 
-L'OCR n'est utile que pour les PDF **scannés sans texte intégré** (rare). Le programme
-cherche Tesseract au chemin par défaut `C:\Program Files\Tesseract-OCR\tesseract.exe`.
+L'OCR n'est utile que pour les PDF **scannés sans texte intégré** (rare — la plupart des
+AEM et bulletins de paie contiennent déjà du texte numérique, extrait directement sans
+OCR). Le programme cherche Tesseract au chemin par défaut
+`C:\Program Files\Tesseract-OCR\tesseract.exe`.
 
+- **L'installeur `.exe` le propose automatiquement** (case cochée par défaut, ignorée si
+  déjà présent) — installation silencieuse au chemin standard.
 - Installé ailleurs ? Reconfigurez le chemin dans **Outils → Paramètres → Chemin
   Tesseract**, ou éditez `config.json` : `"tesseract_path": "C:\\votre\\chemin\\tesseract.exe"`
-- Absent ? Aucun problème si vos PDF contiennent du texte (cas courant).
+- Absent ? Aucun problème si vos PDF contiennent du texte (cas courant) — seuls les
+  documents image tomberont en type INCONNU et devront être complétés manuellement.
 
-Téléchargement : [Tesseract OCR (UB Mannheim)](https://github.com/UB-Mannheim/tesseract/wiki).
+Téléchargement manuel : [Tesseract OCR (UB Mannheim)](https://github.com/UB-Mannheim/tesseract/wiki).
 
 ## Lancement depuis les sources
 
@@ -235,8 +245,11 @@ python -m pytest tests/ -v
 python -m PyInstaller intermitdoc.spec --noconfirm
 # résultat : dist\IntermitDoc\
 
+# une seule fois : récupère l'installeur officiel Tesseract (non versionné, ~48 Mo)
+powershell -File installer_assets\telecharger_tesseract.ps1
+
 "C:\Users\<vous>\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer.iss
-# résultat : installer_output\IntermitDoc-Setup-X.Y.Z.exe
+# résultat : installer_output\IntermitDoc-Setup-X.Y.Z.exe (inclut Tesseract en option)
 ```
 
 ## Architecture
