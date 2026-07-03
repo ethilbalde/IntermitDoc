@@ -977,6 +977,115 @@ class DialogueParametres(tk.Toplevel):
 
 
 # ---------------------------------------------------------------------------
+class DialogueSauvegarde(tk.Toplevel):
+    """Conseils pratiques pour sauvegarder ses documents et données IntermitDoc."""
+
+    def __init__(self, parent, cfg: dict):
+        super().__init__(parent)
+        self.title("Conseils de sauvegarde")
+        self.geometry("620x560")
+        self.minsize(560, 480)
+        self.cfg = cfg
+        self._construire()
+        self.grab_set()
+
+    def _construire(self):
+        hdr = tk.Frame(self, bg="#1565C0")
+        hdr.pack(fill=tk.X)
+        tk.Label(hdr, text="💾  Conseils de sauvegarde", bg="#1565C0", fg="white",
+                 font=("", 13, "bold"), pady=10).pack(padx=14, anchor="w")
+
+        # Zone scrollable
+        frame_scroll = tk.Frame(self)
+        frame_scroll.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+        canvas = tk.Canvas(frame_scroll, highlightthickness=0)
+        scroll = tk.Scrollbar(frame_scroll, orient=tk.VERTICAL, command=canvas.yview)
+        inner = tk.Frame(canvas)
+        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=inner, anchor="nw")
+        canvas.configure(yscrollcommand=scroll.set)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        def section(titre: str, couleur: str = "#1565C0"):
+            tk.Label(inner, text=titre, font=("", 10, "bold"), fg=couleur,
+                     anchor="w").pack(fill=tk.X, padx=14, pady=(14, 2))
+
+        def texte(txt: str):
+            tk.Label(inner, text=txt, font=("", 9), fg="#333", justify="left",
+                     anchor="w", wraplength=560).pack(fill=tk.X, padx=14, pady=1)
+
+        section("Pourquoi sauvegarder ?", "#C62828")
+        texte(
+            "Vos PDF classés (AEM, bulletins de paie, contrats) sont vos seules preuves "
+            "en cas de litige ou de contrôle sur vos droits ARE. Une panne de disque dur "
+            "sans sauvegarde peut vous faire perdre des années de justificatifs."
+        )
+
+        section("Méthode recommandée : synchro cloud automatique")
+        texte(
+            "Installez l'application de bureau de votre service cloud (Google Drive, "
+            "OneDrive ou Dropbox) et configurez-la pour synchroniser votre dossier de "
+            "classement en continu. Une fois configuré, chaque document classé par "
+            "IntermitDoc se sauvegarde automatiquement, sans action de votre part."
+        )
+        texte(
+            "1. Installez l'app de synchro (ex. drive.google.com/drive/download)\n"
+            "2. Choisissez ou déplacez votre dossier de classement à l'intérieur du "
+            "dossier synchronisé (ex. Google Drive/document pro/intermitent)\n"
+            "3. Dans Outils → Paramètres, mettez à jour le Dossier de base vers ce "
+            "nouvel emplacement"
+        )
+
+        dossiers_cloud = DialogueParametres._detecter_dossiers_cloud()
+        if dossiers_cloud:
+            section("☁ Synchro détectée sur cette machine", "#2E7D32")
+            for nom, chemin in dossiers_cloud:
+                texte(f"• {nom} : {chemin}")
+
+        section("N'oubliez pas vos données IntermitDoc (pas seulement les PDF)")
+        texte(
+            "Vos employeurs, contrats prévisionnels et clé API sont stockés séparément, "
+            "dans :\n%APPDATA%\\IntermitDoc\\\n(config.json, employeurs.json, "
+            "traites.json, previsionnels.json)\n\n"
+            "Ces fichiers ne sont PAS synchronisés automatiquement avec vos PDF — "
+            "copiez-les de temps en temps vers votre cloud ou une clé USB, surtout "
+            "avant de changer d'ordinateur."
+        )
+        texte(
+            "⚠ config.json contient votre clé API en clair — ne la mettez jamais sur "
+            "un espace partagé ou public, uniquement sur votre propre cloud privé."
+        )
+
+        section("Bonnes pratiques")
+        texte(
+            "• Gardez toujours au moins 2 copies sur 2 supports différents "
+            "(ex. disque local + cloud)\n"
+            "• Vérifiez de temps en temps que la synchro fonctionne bien (pas d'icône "
+            "d'erreur sur le dossier)\n"
+            "• Avant de changer de PC, faites une copie manuelle complète en plus de "
+            "la synchro automatique"
+        )
+
+        frame_btn = tk.Frame(self)
+        frame_btn.pack(fill=tk.X, padx=10, pady=8)
+        tk.Button(frame_btn, text="📁 Ouvrir mon dossier de classement",
+                  command=self._ouvrir_dossier_base).pack(side=tk.LEFT, padx=4)
+        tk.Button(frame_btn, text="Fermer", command=self.destroy).pack(side=tk.RIGHT, padx=4)
+
+    def _ouvrir_dossier_base(self):
+        dossier = self.cfg.get("dossier_base", "").strip()
+        if dossier and Path(dossier).is_dir():
+            import subprocess
+            subprocess.Popen(["explorer", dossier])
+        else:
+            messagebox.showwarning(
+                "Dossier introuvable",
+                "Configurez d'abord votre dossier de classement dans Outils → Paramètres.",
+                parent=self)
+
+
+# ---------------------------------------------------------------------------
 class TableauPages(tk.Frame):
 
     COLONNES = [
@@ -5653,6 +5762,7 @@ class FenetrePrincipale(TkinterDnD.Tk if DND_DISPONIBLE else tk.Tk):
         menubar.add_cascade(label="Aide", menu=menu_aide)
         menu_aide.add_command(label=f"Version {__version__}", state="disabled")
         menu_aide.add_separator()
+        menu_aide.add_command(label="💾 Conseils de sauvegarde...", command=self._ouvrir_conseils_sauvegarde)
         menu_aide.add_command(label="Vérifier les mises à jour...", command=self._ouvrir_mises_a_jour)
 
     def _changer_theme(self, nom: str) -> None:
@@ -5660,6 +5770,9 @@ class FenetrePrincipale(TkinterDnD.Tk if DND_DISPONIBLE else tk.Tk):
 
     def _ouvrir_mises_a_jour(self):
         FenetreMisesAJour(self)
+
+    def _ouvrir_conseils_sauvegarde(self):
+        DialogueSauvegarde(self, self.cfg)
 
     def _construire_interface(self):
         self.notebook = ttk.Notebook(self)
