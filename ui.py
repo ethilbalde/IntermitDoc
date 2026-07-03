@@ -1043,14 +1043,44 @@ class DialogueSauvegarde(tk.Toplevel):
             for nom, chemin in dossiers_cloud:
                 texte(f"• {nom} : {chemin}")
 
-        section("N'oubliez pas vos données IntermitDoc (pas seulement les PDF)")
+        section("Vos PDF classés sont doublement protégés", "#2E7D32")
         texte(
-            "Vos employeurs, contrats prévisionnels et clé API sont stockés séparément, "
-            "dans :\n%APPDATA%\\IntermitDoc\\\n(config.json, employeurs.json, "
-            "traites.json, previsionnels.json)\n\n"
-            "Ces fichiers ne sont PAS synchronisés automatiquement avec vos PDF — "
-            "copiez-les de temps en temps vers votre cloud ou une clé USB, surtout "
-            "avant de changer d'ordinateur."
+            "Dès qu'un document a été traité une fois, IntermitDoc peut retrouver "
+            "toutes ses infos (type, dates, employeur, heures, salaire) rien qu'en "
+            "regardant vos dossiers — de deux façons indépendantes :"
+        )
+        texte(
+            "1. Le nom du fichier lui-même (ex. [AEM] 2026-07-18 LA VOUIVRE 6h "
+            "140EUR.pdf)\n"
+            "2. Des métadonnées écrites à l'intérieur du PDF (invisibles à l'oeil, "
+            "lues automatiquement par l'onglet Scan & Déplacement)"
+        )
+        texte(
+            "Résultat concret : si vous restaurez juste vos PDF classés dans la bonne "
+            "arborescence après un changement de PC (même sans %APPDATA%), Suivi, "
+            "Récapitulatif et Historique retrouvent tout tout seuls au prochain "
+            "Actualiser — même si un fichier a été renommé, l'onglet Scan le "
+            "retrouve grâce à sa métadonnée interne."
+        )
+
+        section("Ce qui N'EST PAS récupérable automatiquement", "#C62828")
+        texte(
+            "Vos contrats prévisionnels (⏳ engagements futurs saisis à l'avance) "
+            "n'ont PAS de PDF associé — ils n'existent que dans un fichier "
+            "previsionnels.json. S'il est perdu, ils sont perdus pour de bon et "
+            "devront être ressaisis à la main. C'est le seul élément vraiment "
+            "irremplaçable de l'application."
+        )
+
+        section("Le reste de vos données (confort, pas critique)")
+        texte(
+            "Votre liste d'employeurs, votre clé API et l'historique anti-doublons "
+            "sont stockés dans :\n%APPDATA%\\IntermitDoc\\\n(config.json, "
+            "employeurs.json, traites.json, previsionnels.json)\n\n"
+            "Ces fichiers ne sont PAS synchronisés automatiquement avec vos PDF. "
+            "Sauvegardez au minimum previsionnels.json (voir ci-dessus) ; les "
+            "autres accélèrent juste le travail au quotidien mais ne font pas "
+            "perdre vos justificatifs s'ils manquent."
         )
         texte(
             "⚠ config.json contient votre clé API en clair — ne la mettez jamais sur "
