@@ -298,7 +298,19 @@ def creer_structure_dossiers(config: dict) -> int:
 # que pour les AEM, donc le nom du fichier BP ne change jamais).
 
 def _synchroniser_dossier_mois(dossier_mois: Path) -> dict:
-    """Synchronise heures/salaire des AEM vers les BP d'un seul dossier mois."""
+    """
+    Synchronise heures/salaire des AEM vers les BP d'un seul dossier mois.
+
+    L'employeur utilisé pour l'appariement est toujours dérivé du NOM de
+    fichier (fiable, jamais tronqué) plutôt que de la métadonnée interne,
+    qui peut être absente (fichiers classés avant l'ajout de cette
+    fonctionnalité) ou tronquée (ancien bug de sérialisation corrigé dans
+    _injecter_metadata, mais déjà présent sur les fichiers existants).
+    Au passage, réinjecte une métadonnée complète dans les AEM qui n'en
+    avaient pas encore.
+    """
+    from analyzer import analyser_nom_fichier
+
     dossier_aem = dossier_mois / "AEM"
     dossier_bp  = dossier_mois / "BP"
     resultat = {"synchronises": [], "sans_correspondance": []}
@@ -308,35 +320,44 @@ def _synchroniser_dossier_mois(dossier_mois: Path) -> dict:
     aem_par_employeur: dict[str, dict] = {}
     if dossier_aem.is_dir():
         for pdf in dossier_aem.glob("*.pdf"):
-            meta = lire_metadata_intermitdoc(str(pdf))
-            if not meta:
+            parsed = analyser_nom_fichier(pdf.name)
+            if not parsed or not parsed.get("employeur"):
                 continue
-            emp = (meta.get("employeur") or "").strip().lower()
-            if emp and (meta.get("heures") or meta.get("salaire")):
-                aem_par_employeur.setdefault(emp, meta)
+            emp = parsed["employeur"].strip().lower()
+            if parsed.get("heures") or parsed.get("salaire_brut"):
+                aem_par_employeur.setdefault(emp, parsed)
+            if not lire_metadata_intermitdoc(str(pdf)):
+                try:
+                    pdf.write_bytes(_injecter_metadata(pdf.read_bytes(), parsed))
+                except Exception:
+                    pass
 
     for pdf in dossier_bp.glob("*.pdf"):
-        meta_bp = lire_metadata_intermitdoc(str(pdf))
-        if not meta_bp:
+        parsed_bp = analyser_nom_fichier(pdf.name)
+        if not parsed_bp or not parsed_bp.get("employeur"):
             continue
-        if meta_bp.get("heures") and meta_bp.get("salaire"):
+
+        meta_bp = lire_metadata_intermitdoc(str(pdf)) or {}
+        heures_actuelles = meta_bp.get("heures", "")
+        salaire_actuel   = meta_bp.get("salaire", "")
+        if heures_actuelles and salaire_actuel:
             continue  # déjà complet
 
-        emp = (meta_bp.get("employeur") or "").strip().lower()
-        aem_meta = aem_par_employeur.get(emp)
-        if not aem_meta:
+        emp = parsed_bp["employeur"].strip().lower()
+        aem_info = aem_par_employeur.get(emp)
+        if not aem_info:
             resultat["sans_correspondance"].append(pdf.name)
             continue
 
         info_maj = {
-            "type":        meta_bp.get("type", "BP"),
-            "annee":       meta_bp.get("annee", ""),
-            "mois":        meta_bp.get("mois", ""),
-            "employeur":   meta_bp.get("employeur", ""),
-            "date_debut":  meta_bp.get("date_debut", ""),
-            "date_fin":    meta_bp.get("date_fin", ""),
-            "heures":      meta_bp.get("heures") or aem_meta.get("heures", ""),
-            "salaire_brut": meta_bp.get("salaire") or aem_meta.get("salaire", ""),
+            "type":        "BP",
+            "annee":       parsed_bp.get("annee", ""),
+            "mois":        parsed_bp.get("mois", ""),
+            "employeur":   parsed_bp.get("employeur", ""),
+            "date_debut":  parsed_bp.get("date_debut", ""),
+            "date_fin":    parsed_bp.get("date_fin", ""),
+            "heures":      heures_actuelles or aem_info.get("heures", ""),
+            "salaire_brut": salaire_actuel or aem_info.get("salaire_brut", ""),
         }
         try:
             pdf.write_bytes(_injecter_metadata(pdf.read_bytes(), info_maj))
