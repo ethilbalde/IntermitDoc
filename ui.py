@@ -1354,6 +1354,8 @@ def _parser_nom_doc(nom: str) -> dict | None:
     return {
         "nom":        nom,
         "type":       type_doc,
+        "annee":      date_debut[:4],
+        "mois":       date_debut[5:7],
         "date_debut": date_debut,
         "date_fin":   date_fin,
         "employeur":  employeur,
