@@ -35,7 +35,6 @@ from analyzer import (
     analyser_details_aem, chercher_employeur_connu,
     tester_connexion_ia,
     extraire_info_nom_fichier, fusionner_info_nom_analyse,
-    analyser_nom_fichier,
 )
 from classifier import (
     construire_nom_fichier,
