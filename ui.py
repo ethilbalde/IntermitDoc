@@ -3397,10 +3397,13 @@ class OngletScan(tk.Frame):
 
             annee = meta.get("annee", "")
             mois  = meta.get("mois",  "")
+            jour_debut = meta.get("date_debut", "")
+            jour_fin   = meta.get("date_fin", "") or jour_debut
             info = {
                 "type":       meta.get("type", ""),
-                "date_debut": f"{annee}-{mois}-01" if annee and mois else "",
-                "date_fin":   "",
+                "date_debut": (f"{annee}-{mois}-{jour_debut}" if jour_debut
+                               else f"{annee}-{mois}-01" if annee and mois else ""),
+                "date_fin":   f"{annee}-{mois}-{jour_fin}" if jour_fin else "",
                 "employeur":  meta.get("employeur", ""),
                 "heures":     meta.get("heures", ""),
                 "salaire":    meta.get("salaire", ""),

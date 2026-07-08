@@ -13,6 +13,12 @@ from pathlib import Path
 from config import MOIS_DOSSIERS, TYPES_DOCUMENTS, resoudre_dossier_base
 
 METADATA_KEY = "IntermitDoc"   # valeur dans le champ 'subject' du PDF
+_SEP_ESPACE = "%20"  # remplace les espaces internes aux valeurs 'keywords'
+                      # (le format key=value est lui-même séparé par des
+                      # espaces — sans ça "employeur=MUZIK EVENT" serait
+                      # coupé en deux tokens à la lecture). Un caractère de
+                      # contrôle (\x1f) ne survit pas à l'encodage interne
+                      # du PDF — on utilise un jeton imprimable à la place.
 
 
 def _injecter_metadata(pdf_bytes: bytes, info: dict) -> bytes:
@@ -25,24 +31,30 @@ def _injecter_metadata(pdf_bytes: bytes, info: dict) -> bytes:
         import fitz
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         meta = doc.metadata or {}
-        type_doc = info.get("type", "")
-        annee    = info.get("annee", "")
-        mois     = info.get("mois", "")
-        emp      = info.get("employeur", "")
-        heures   = info.get("heures", "")
-        salaire  = info.get("salaire_brut", "")
-        date_trait = str(_date.today())
+        champs = {
+            "type":       info.get("type", ""),
+            "annee":      info.get("annee", ""),
+            "mois":       info.get("mois", ""),
+            "employeur":  info.get("employeur", ""),
+            "date_debut": info.get("date_debut", ""),
+            "date_fin":   info.get("date_fin", ""),
+            "heures":     info.get("heures", ""),
+            "salaire":    info.get("salaire_brut", ""),
+            "traite":     str(_date.today()),
+        }
+        # Les valeurs sont séparées par des espaces dans "keywords" ; encoder
+        # les espaces internes (ex: "MUZIK EVENT") pour ne pas les tronquer
+        # à la lecture — voir lire_metadata_intermitdoc().
+        keywords = " ".join(
+            f"{k}={str(v).replace(' ', _SEP_ESPACE)}" for k, v in champs.items()
+        )
         doc.set_metadata({
             "author":   meta.get("author", ""),
             "title":    meta.get("title", ""),
             "creator":  meta.get("creator", ""),
             "producer": meta.get("producer", ""),
-            "subject":  f"IntermitDoc:{type_doc}:{annee}-{mois}",
-            "keywords": (
-                f"IntermitDoc type={type_doc} annee={annee} mois={mois} "
-                f"employeur={emp} heures={heures} salaire={salaire} "
-                f"traite={date_trait}"
-            ),
+            "subject":  f"IntermitDoc:{champs['type']}:{champs['annee']}-{champs['mois']}",
+            "keywords": f"IntermitDoc {keywords}",
         })
         result = doc.tobytes(deflate=True)
         doc.close()
@@ -65,12 +77,12 @@ def lire_metadata_intermitdoc(chemin_pdf: str) -> dict | None:
         keywords = meta.get("keywords", "")
         if not subject.startswith("IntermitDoc:"):
             return None
-        # Parser les keywords
+        # Parser les keywords (espaces internes encodés — voir _injecter_metadata)
         result = {}
         for part in keywords.split():
             if "=" in part:
                 k, v = part.split("=", 1)
-                result[k] = v
+                result[k] = v.replace(_SEP_ESPACE, " ")
         return result
     except Exception:
         return None
