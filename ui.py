@@ -2006,15 +2006,6 @@ class OngletCalcul(tk.Frame):
 class OngletSuivi(tk.Frame):
     """Tableau de bord du suivi des droits intermittent."""
 
-    COL_DOCS = [
-        ("type",       "Type",      55),
-        ("date_debut", "Début",    105),
-        ("date_fin",   "Fin",      105),
-        ("employeur",  "Employeur", 210),
-        ("heures",     "Heures",    70),
-        ("salaire",    "Salaire",   90),
-    ]
-
     def __init__(self, parent, cfg_getter, **kwargs):
         super().__init__(parent, **kwargs)
         self._cfg_getter  = cfg_getter
@@ -2155,45 +2146,6 @@ class OngletSuivi(tk.Frame):
                      fg=TH.TEXT_MUTED, anchor="center").pack(fill=tk.X)
 
             self._labels_chiffres[key] = lbl_val
-
-        # ── Tableau des contrats ───────────────────────────────────────────
-        frame_table = tk.LabelFrame(self, text="Historique des contrats sur la période",
-                                     padx=4, pady=4)
-        frame_table.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
-
-        scroll_v = tk.Scrollbar(frame_table, orient=tk.VERTICAL)
-        scroll_h = tk.Scrollbar(frame_table, orient=tk.HORIZONTAL)
-
-        self.tree = ttk.Treeview(
-            frame_table,
-            columns=[c[0] for c in self.COL_DOCS],
-            show="headings",
-            yscrollcommand=scroll_v.set,
-            xscrollcommand=scroll_h.set,
-            height=10,
-        )
-        scroll_v.config(command=self.tree.yview)
-        scroll_h.config(command=self.tree.xview)
-
-        for col_id, col_titre, col_larg in self.COL_DOCS:
-            self.tree.column(col_id, width=col_larg, minwidth=40,
-                             stretch=(col_id in ("employeur",)))
-            self.tree.heading(col_id, text=col_titre)
-
-        self.tree.tag_configure("aem",  background="#E3F2FD")
-        self.tree.tag_configure("bp",   background="#E8F5E9")
-        self.tree.tag_configure("cs",   background="#FFF8E1")
-        self.tree.tag_configure("ct",   background="#FFF8E1")
-        self.tree.tag_configure("stc",  background="#FCE4EC")
-        self.tree.tag_configure("total",background="#BBDEFB", font=("", 9, "bold"))
-
-        self.tree.grid(row=0, column=0, sticky="nsew")
-        scroll_v.grid(row=0, column=1, sticky="ns")
-        scroll_h.grid(row=1, column=0, sticky="ew")
-        frame_table.grid_rowconfigure(0, weight=1)
-        frame_table.grid_columnconfigure(0, weight=1)
-
-        self._tri = _installer_tri(self.tree, [c[0] for c in self.COL_DOCS])
 
         # ── Barre du bas : bouton export ───────────────────────────────────
         frame_bas = tk.Frame(self, pady=6)
@@ -2392,7 +2344,7 @@ class OngletSuivi(tk.Frame):
         )
         self._afficher_barre()
         self._afficher_chiffres()
-        self._afficher_tableau()
+        self._maj_resume_periode()
 
     def _ajouter_previsionnel(self):
         """Ouvre le dialogue de saisie d'un contrat prévisionnel."""
@@ -2586,28 +2538,11 @@ class OngletSuivi(tk.Frame):
                 if key == "manquantes":
                     lbl.config(fg=TH.DANGER if manquantes > 0 else TH.SUCCESS)
 
-    def _afficher_tableau(self):
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-
+    def _maj_resume_periode(self):
+        """Résumé texte (nb documents réels/prévisionnels) sur la période —
+        remplace l'ancien tableau détaillé, retiré pour alléger l'affichage."""
         docs = self._stats.get("docs_periode", [])
-        total_h = total_s = 0.0
 
-        # Docs réels
-        for d in docs:
-            tag = d["type"].lower()
-            h_str = f"{d['heures']}h"      if d["heures"]  else "—"
-            s_str = f"{d['salaire']} EUR"  if d["salaire"] else "—"
-            self.tree.insert("", tk.END, values=(
-                f"[{d['type']}]", d["date_debut"], d["date_fin"],
-                d["employeur"], h_str, s_str,
-            ), tags=(tag,))
-            try: total_h += float(d["heures"])
-            except (ValueError, TypeError): pass
-            try: total_s += float(d["salaire"])
-            except (ValueError, TypeError): pass
-
-        # Prévisionnels sur la période — reconstruct full ISO dates before filtering
         d1 = self.var_date_debut.get().strip()
         d2 = self.var_date_fin.get().strip()
         prevs_periode = []
@@ -2619,53 +2554,11 @@ class OngletSuivi(tk.Frame):
             df = f"{a}-{mo}-{df_raw}" if (a and mo and df_raw and len(df_raw) == 2) else dd
             if dd >= d1 and df <= d2:
                 prevs_periode.append(p)
-        if prevs_periode:
-            self.tree.insert("", tk.END, values=(
-                "── Prévisionnel ──", "", "", "", "", "",
-            ), tags=("total",))
-        for p in prevs_periode:
-            h_str = f"{p['heures']}h"     if p.get("heures")  else "—"
-            s_str = f"{p['salaire']} EUR" if p.get("salaire") else "—"
-            ecarts = self._detecter_ecarts_ligne(p)
-            statut = f"⚠ {ecarts}" if ecarts else "Prévisionnel"
-            self.tree.insert("", tk.END, values=(
-                "[PRÉVI]", p.get("date_debut",""), p.get("date_fin",""),
-                p.get("employeur",""), h_str, s_str,
-            ), tags=("prev_alerte" if ecarts else "prev",))
-
-        if docs or prevs_periode:
-            self.tree.insert("", tk.END, values=(
-                f"TOTAL RÉEL ({len(docs)})", "", "", "",
-                f"{total_h:.1f}h", f"{total_s:.2f} EUR",
-            ), tags=("total",))
-
-        self.tree.tag_configure("prev",        background="#EDE7F6")
-        self.tree.tag_configure("prev_alerte", background="#FFCCBC",
-                                font=("", 9, "bold"))
 
         self.lbl_bas.config(
             text=f"{len(docs)} doc(s) réel(s) + {len(prevs_periode)} prévisionnel(s) "
                  f"sur la période  |  {len(self._docs_tous)} au total"
         )
-
-    def _detecter_ecarts_ligne(self, prev: dict) -> str:
-        """Retourne une description d'écart si un doc réel correspond à ce prévisionnel."""
-        from previsionnel import _safe_float, _periodes_se_chevauchent
-        msgs = []
-        for d in self._stats.get("docs_periode", []):
-            if d.get("employeur", "").lower() != prev.get("employeur", "").lower():
-                continue
-            if not _periodes_se_chevauchent(d, prev):
-                continue
-            h_r = _safe_float(d.get("heures", ""))
-            h_p = _safe_float(prev.get("heures", ""))
-            if h_r is not None and h_p is not None and h_r != h_p:
-                msgs.append(f"{h_p:.0f}h prévi → {h_r:.0f}h réel")
-            s_r = _safe_float(d.get("salaire", ""))
-            s_p = _safe_float(prev.get("salaire", ""))
-            if s_r is not None and s_p is not None and s_r != s_p:
-                msgs.append(f"{s_p:.0f}€ prévi → {s_r:.0f}€ réel")
-        return " | ".join(msgs)
 
     def _ouvrir_calcul_are(self):
         if not self._stats or not self._stats.get("nb_docs"):
