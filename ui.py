@@ -5032,12 +5032,21 @@ class OngletRecap(tk.Frame):
         else:
             self._txt_alertes.insert(
                 tk.END, f"{len(sans_aem)} BP sans AEM correspondant :\n\n", "titre")
-            sans_aem.sort(key=lambda d: (d.get("annee", ""), d.get("mois", "")), reverse=True)
+            sans_aem.sort(key=lambda d: d.get("date_debut", ""), reverse=True)
             for d in sans_aem:
-                nom_mois = MOIS_NOMS.get(d.get("mois", ""), d.get("mois", ""))
+                nom_mois  = MOIS_NOMS.get(d.get("mois", ""), d.get("mois", ""))
+                dd, df    = d.get("date_debut", ""), d.get("date_fin", "")
+                jour_debut = dd[8:10] if len(dd) == 10 else ""
+                jour_fin   = df[8:10] if len(df) == 10 else ""
+                if jour_debut and jour_fin and jour_debut != jour_fin:
+                    jours = f"du {jour_debut} au {jour_fin}"
+                elif jour_debut:
+                    jours = f"le {jour_debut}"
+                else:
+                    jours = ""
                 self._txt_alertes.insert(
                     tk.END,
-                    f"• {d.get('annee','')}/{nom_mois} — "
+                    f"• {d.get('annee','')}/{nom_mois} {jours} — "
                     f"{d.get('employeur','?')}\n", "ligne")
         self._txt_alertes.config(state=tk.DISABLED)
 
