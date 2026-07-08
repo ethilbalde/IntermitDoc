@@ -35,6 +35,7 @@ from analyzer import (
     analyser_details_aem, chercher_employeur_connu,
     tester_connexion_ia,
     extraire_info_nom_fichier, fusionner_info_nom_analyse,
+    analyser_nom_fichier,
 )
 from classifier import (
     construire_nom_fichier,
@@ -3580,6 +3581,18 @@ class OngletScan(tk.Frame):
 # (OngletSuivi and OngletRecap can both trigger it on the same refresh).
 _dedup_en_cours = False
 
+def _employeurs_correspondent(a: str, b: str) -> bool:
+    """
+    Compare deux noms d'employeur (déjà normalisés en minuscules) en
+    tolérant la troncature héritée d'un ancien bug de métadonnées PDF
+    (ex: "muzik" au lieu de "muzik event") — préfixe dans un sens ou
+    l'autre, en plus de l'égalité stricte.
+    """
+    if not a or not b:
+        return False
+    return a == b or a.startswith(b) or b.startswith(a)
+
+
 def _deduplication_previsionnels(docs_reels: list) -> dict:
     """
     Compare les prévisionnels avec les AEM réels.
@@ -3622,7 +3635,7 @@ def _deduplication_previsionnels(docs_reels: list) -> dict:
             re_emp = (reel.get("employeur") or "").strip().lower()
             rd = reel.get("date_debut", "")
 
-            if pa == ra and pm == rm and pe == re_emp and pd_full == rd:
+            if pa == ra and pm == rm and _employeurs_correspondent(pe, re_emp) and pd_full == rd:
                 match_fort = True
                 break
 
@@ -3638,7 +3651,7 @@ def _deduplication_previsionnels(docs_reels: list) -> dict:
             rm = reel.get("mois",  "")
             re_emp = (reel.get("employeur") or "").strip().lower()
 
-            if pa != ra or pm != rm or pe != re_emp:
+            if pa != ra or pm != rm or not _employeurs_correspondent(pe, re_emp):
                 continue
 
             # Construire des dicts avec des dates complètes pour la comparaison
@@ -4112,7 +4125,21 @@ class OngletHistorique(tk.Frame):
         if not annee or not mois:
             return
 
-        docs_reels = [c["info"] for c in self._contrats if not c.get("previsionnel")]
+        # _deduplication_previsionnels attend des dates ISO complètes
+        # (comme _scanner_tous_docs) ; les info de Historique ne stockent
+        # que le jour brut ("22") — les reconstruire avant l'appel.
+        docs_reels = []
+        for c in self._contrats:
+            if c.get("previsionnel"):
+                continue
+            info = dict(c["info"])
+            a, m = info.get("annee", ""), info.get("mois", "")
+            jd = info.get("date_debut", "")
+            jf = info.get("date_fin", "") or jd
+            if a and m and jd and len(jd) == 2:
+                info["date_debut"] = f"{a}-{m}-{jd}"
+                info["date_fin"]   = f"{a}-{m}-{jf}" if jf and len(jf) == 2 else info["date_debut"]
+            docs_reels.append(info)
         rapport = _deduplication_previsionnels(docs_reels)
         en_attente_mois = [
             p for p in rapport["en_attente"]
@@ -4737,9 +4764,24 @@ class OngletRecap(tk.Frame):
         self._frame_cartes = tk.Frame(self, padx=10, pady=6)
         self._frame_cartes.pack(fill=tk.X)
 
-        # ── Tableau détail ─────────────────────────────────────────────────
-        frame_tree = tk.LabelFrame(self, text="Détail des contrats", padx=4, pady=4)
-        frame_tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
+        # ── Tableau détail + encart d'alertes ────────────────────────────────
+        paned = tk.PanedWindow(self, orient=tk.HORIZONTAL, sashwidth=6,
+                               sashrelief=tk.RAISED)
+        paned.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
+
+        frame_tree = tk.LabelFrame(paned, text="Détail des contrats", padx=4, pady=4)
+        paned.add(frame_tree, minsize=420)
+
+        frame_alertes = tk.LabelFrame(paned, text="⚠ BP sans AEM correspondant",
+                                      padx=4, pady=4)
+        paned.add(frame_alertes, minsize=220, width=260)
+
+        self._txt_alertes = scrolledtext.ScrolledText(
+            frame_alertes, wrap=tk.WORD, font=("", 9), state=tk.DISABLED,
+            padx=6, pady=6)
+        self._txt_alertes.pack(fill=tk.BOTH, expand=True)
+        self._txt_alertes.tag_configure("titre", font=("", 9, "bold"), foreground="#B71C1C")
+        self._txt_alertes.tag_configure("ligne", font=("", 9))
 
         sv = tk.Scrollbar(frame_tree, orient=tk.VERTICAL)
         sh = tk.Scrollbar(frame_tree, orient=tk.HORIZONTAL)
@@ -4951,6 +4993,48 @@ class OngletRecap(tk.Frame):
 
         self._maj_cartes(docs, sel, periodes)
         self._maj_tableau(docs, periodes)
+        self._maj_alertes(docs)
+
+    def _maj_alertes(self, docs):
+        """Liste les BP (période filtrée) sans AEM correspondant (même
+        année/mois/employeur, tolérant aux troncatures héritées)."""
+        MOIS_NOMS = OngletHistorique.MOIS_NOMS
+        employeurs_aem = {
+            (d.get("annee", ""), d.get("mois", ""),
+             (d.get("employeur") or "").strip().lower())
+            for d in docs if d.get("type") == "AEM" and not d.get("_previsionnel")
+        }
+
+        def _a_un_aem(bp):
+            a, m = bp.get("annee", ""), bp.get("mois", "")
+            emp  = (bp.get("employeur") or "").strip().lower()
+            return any(
+                a == ea and m == em and _employeurs_correspondent(emp, ee)
+                for ea, em, ee in employeurs_aem
+            )
+
+        sans_aem = [
+            d for d in docs
+            if d.get("type") == "BP" and not d.get("_previsionnel")
+            and not _a_un_aem(d)
+        ]
+
+        self._txt_alertes.config(state=tk.NORMAL)
+        self._txt_alertes.delete("1.0", tk.END)
+        if not sans_aem:
+            self._txt_alertes.insert(tk.END, "✓ Aucun BP sans AEM sur la "
+                                     "période affichée.\n", "ligne")
+        else:
+            self._txt_alertes.insert(
+                tk.END, f"{len(sans_aem)} BP sans AEM correspondant :\n\n", "titre")
+            sans_aem.sort(key=lambda d: (d.get("annee", ""), d.get("mois", "")), reverse=True)
+            for d in sans_aem:
+                nom_mois = MOIS_NOMS.get(d.get("mois", ""), d.get("mois", ""))
+                self._txt_alertes.insert(
+                    tk.END,
+                    f"• {d.get('annee','')}/{nom_mois} — "
+                    f"{d.get('employeur','?')}\n", "ligne")
+        self._txt_alertes.config(state=tk.DISABLED)
 
     def _maj_cartes(self, docs, sel, periodes):
         for w in self._frame_cartes.winfo_children():
