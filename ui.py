@@ -3558,6 +3558,9 @@ def _deduplication_previsionnels(docs_reels: list) -> dict:
         pm = prev.get("mois",  "")
         pe = (prev.get("employeur") or "").strip().lower()
         pd = prev.get("date_debut", "")
+        # Le prévisionnel ne stocke que le jour ("22") ; les docs réels ont la
+        # date ISO complète ("2026-06-22") — reconstruire pour comparer juste.
+        pd_full = f"{pa}-{pm}-{pd}" if pd and len(pd) == 2 else pd
 
         match_fort = False
         for reel in aems:
@@ -3566,7 +3569,7 @@ def _deduplication_previsionnels(docs_reels: list) -> dict:
             re_emp = (reel.get("employeur") or "").strip().lower()
             rd = reel.get("date_debut", "")
 
-            if pa == ra and pm == rm and pe == re_emp and pd == rd:
+            if pa == ra and pm == rm and pe == re_emp and pd_full == rd:
                 match_fort = True
                 break
 
