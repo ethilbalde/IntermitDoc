@@ -3599,12 +3599,14 @@ def _deduplication_previsionnels(docs_reels: list) -> dict:
     Niveau 1 (match fort) : annee + mois + employeur + date_debut identiques
       → supprimé automatiquement de previsionnels.json
     Niveau 2 (chevauchement) : meme annee + mois + employeur, dates qui se
-      chevauchent mais date_debut différente → avertissement seulement
+      chevauchent mais date_debut différente (ex: un AEM multi-jours couvrant
+      plusieurs prévisionnels saisis un par un) → supprimé automatiquement
+      aussi, mais listé séparément dans le rapport pour rester traçable
 
     Retourne un dict :
       {
-        "supprimes":      [prev, ...],   # supprimés automatiquement
-        "conflits":       [(prev, reel), ...],  # chevauchement sans match exact
+        "supprimes":      [prev, ...],   # supprimés — match exact
+        "conflits":       [(prev, reel), ...],  # supprimés — chevauchement
         "en_attente":     [prev, ...],   # prévisionnels non touchés
       }
     """
@@ -3667,6 +3669,7 @@ def _deduplication_previsionnels(docs_reels: list) -> dict:
                 break
 
         if conflit_trouve:
+            supprimer_previsionnel(prev.get("id", ""))
             conflits.append((prev, conflit_trouve))
         else:
             restes.append(prev)
@@ -3735,8 +3738,9 @@ class _DialogueRapportDedup(tk.Toplevel):
             txt.insert(tk.END, "✓ Aucun doublon exact détecté.\n\n")
 
         if conflits:
-            txt.insert(tk.END, f"⚠  {len(conflits)} conflit(s) de dates à vérifier manuellement\n")
-            txt.insert(tk.END, "  (même employeur, même mois, mais dates différentes)\n\n")
+            txt.insert(tk.END, f"✓ {len(conflits)} prévisionnel(s) supprimé(s) par chevauchement\n")
+            txt.insert(tk.END, "  (couverts par un contrat réel du même mois/employeur, "
+                                "sans correspondance exacte — ex: AEM multi-jours)\n\n")
             for prev, reel in conflits:
                 txt.insert(tk.END, f"  Prévisionnel :\n{_fmt(prev)}\n")
                 txt.insert(tk.END, f"  Contrat réel  :\n{_fmt(reel)}\n\n")
@@ -4154,7 +4158,7 @@ class OngletHistorique(tk.Frame):
             _DialogueRapportDedup(self, rapport["supprimes"], rapport["conflits"],
                                   en_attente_mois)
 
-        if rapport["supprimes"]:
+        if rapport["supprimes"] or rapport["conflits"]:
             self._actualiser_liste()
 
     @staticmethod
