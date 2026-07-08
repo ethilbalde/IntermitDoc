@@ -4762,8 +4762,16 @@ class OngletRecap(tk.Frame):
         self._combo_mois = ttk.Combobox(
             bar2, textvariable=self.var_mois, width=12, state="readonly",
             values=["Tous"] + [f"{num} {nom}" for num, nom in OngletHistorique.MOIS_LABELS])
-        self._combo_mois.pack(side=tk.LEFT, padx=6)
+        self._combo_mois.pack(side=tk.LEFT, padx=(6, 16))
         self._combo_mois.bind("<<ComboboxSelected>>", lambda e: self._filtrer())
+
+        tk.Label(bar2, text="Type :").pack(side=tk.LEFT)
+        self.var_type = tk.StringVar(value="Tous")
+        self._combo_type = ttk.Combobox(
+            bar2, textvariable=self.var_type, width=8, state="readonly",
+            values=["Tous", "AEM", "BP", "CS", "CT", "STC"])
+        self._combo_type.pack(side=tk.LEFT, padx=6)
+        self._combo_type.bind("<<ComboboxSelected>>", lambda e: self._filtrer())
 
         # ── Cartes de synthèse ─────────────────────────────────────────────
         self._frame_cartes = tk.Frame(self, padx=10, pady=6)
@@ -4995,6 +5003,10 @@ class OngletRecap(tk.Frame):
         if sel_mois != "Tous":
             mois_num = sel_mois.split(" ")[0]
             docs = [d for d in docs if d.get("mois", "") == mois_num]
+
+        sel_type = self.var_type.get()
+        if sel_type != "Tous":
+            docs = [d for d in docs if d.get("type", "") == sel_type]
 
         self._maj_cartes(docs, sel, periodes)
         self._maj_tableau(docs, periodes)
