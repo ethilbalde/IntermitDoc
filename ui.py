@@ -4713,14 +4713,14 @@ class OngletRecap(tk.Frame):
     """
 
     COL = [
-        ("annee",     "Année",        55),
+        ("jour_debut","Jour début",    70),
+        ("jour_fin",  "Jour fin",      70),
         ("mois",      "Mois",         80),
+        ("annee",     "Année",        55),
         ("type",      "Type",         55),
         ("employeur", "Employeur",    160),
         ("heures",    "Heures",        60),
         ("salaire",   "Salaire brut",  90),
-        ("date_debut","Date début",    80),
-        ("date_fin",  "Date fin",      80),
     ]
 
     def __init__(self, parent, cfg_getter):
@@ -5003,7 +5003,6 @@ class OngletRecap(tk.Frame):
     def _maj_alertes(self, docs):
         """Liste les BP (période filtrée) sans AEM correspondant (même
         année/mois/employeur, tolérant aux troncatures héritées)."""
-        MOIS_NOMS = OngletHistorique.MOIS_NOMS
         employeurs_aem = {
             (d.get("annee", ""), d.get("mois", ""),
              (d.get("employeur") or "").strip().lower())
@@ -5034,20 +5033,11 @@ class OngletRecap(tk.Frame):
                 tk.END, f"{len(sans_aem)} BP sans AEM correspondant :\n\n", "titre")
             sans_aem.sort(key=lambda d: d.get("date_debut", ""), reverse=True)
             for d in sans_aem:
-                nom_mois  = MOIS_NOMS.get(d.get("mois", ""), d.get("mois", ""))
-                dd, df    = d.get("date_debut", ""), d.get("date_fin", "")
-                jour_debut = dd[8:10] if len(dd) == 10 else ""
-                jour_fin   = df[8:10] if len(df) == 10 else ""
-                if jour_debut and jour_fin and jour_debut != jour_fin:
-                    jours = f"du {jour_debut} au {jour_fin}"
-                elif jour_debut:
-                    jours = f"le {jour_debut}"
-                else:
-                    jours = ""
+                dd, df = d.get("date_debut", ""), d.get("date_fin", "")
+                date_txt = f"{dd} → {df}" if df and df != dd else dd
                 self._txt_alertes.insert(
                     tk.END,
-                    f"• {d.get('annee','')}/{nom_mois} {jours} — "
-                    f"{d.get('employeur','?')}\n", "ligne")
+                    f"• {date_txt} - {d.get('employeur','?')}\n", "ligne")
         self._txt_alertes.config(state=tk.DISABLED)
 
     def _maj_cartes(self, docs, sel, periodes):
@@ -5125,15 +5115,15 @@ class OngletRecap(tk.Frame):
             if per != periode_courante:
                 if periode_courante is not None:
                     self.tree.insert("", tk.END, values=(
-                        f"TOTAL période", "", "", "",
-                        f"{total_h:.1f} h", f"{total_s:.2f} €", "", ""),
+                        f"TOTAL période", "", "", "", "", "",
+                        f"{total_h:.1f} h", f"{total_s:.2f} €"),
                         tags=("total",))
                     total_h = total_s = 0.0
                 periode_courante = per
                 # Ligne de séparateur de période
                 self.tree.insert("", tk.END, values=(
-                    "─── " + (per.replace("  (en cours)", " ◀ en cours") if per else ""), "", "", "",
-                    "", "", "", ""),
+                    "─── " + (per.replace("  (en cours)", " ◀ en cours") if per else ""),
+                    "", "", "", "", "", "", ""),
                     tags=("separateur",))
 
             h = self._num(d.get("heures"))
@@ -5141,21 +5131,24 @@ class OngletRecap(tk.Frame):
             total_h += h
             total_s += s
             tag = "previsionnel" if d.get("_previsionnel") else d.get("type", "").lower()
+            dd, df = d.get("date_debut", ""), d.get("date_fin", "")
+            jour_debut = dd[8:10] if len(dd) == 10 else dd
+            jour_fin   = df[8:10] if len(df) == 10 else df
             self.tree.insert("", tk.END, values=(
-                d.get("annee", ""),
+                jour_debut,
+                jour_fin,
                 OngletHistorique.MOIS_NOMS.get(d.get("mois", ""), d.get("mois", "")),
+                d.get("annee", ""),
                 d.get("type", "") + (" ⏳" if d.get("_previsionnel") else ""),
                 d.get("employeur", ""),
                 f"{h:.1f} h" if h else "—",
                 f"{s:.2f} €" if s else "—",
-                d.get("date_debut", ""),
-                d.get("date_fin", ""),
             ), tags=(tag,))
 
         if periode_courante:
             self.tree.insert("", tk.END, values=(
-                f"TOTAL période", "", "", "",
-                f"{total_h:.1f} h", f"{total_s:.2f} €", "", ""),
+                f"TOTAL période", "", "", "", "", "",
+                f"{total_h:.1f} h", f"{total_s:.2f} €"),
                 tags=("total",))
 
         nb = len(docs)
