@@ -3820,6 +3820,11 @@ class OngletHistorique(tk.Frame):
         tk.Button(nav, text="🔄 Actualiser", command=self._actualiser_liste,
                   pady=2).pack(side=tk.LEFT, padx=4)
 
+        tk.Button(nav, text="🔍 Scanner doublons du mois",
+                  command=self._scanner_doublons_mois,
+                  bg="#7B1FA2", fg="white",
+                  pady=2, padx=6).pack(side=tk.LEFT, padx=4)
+
         tk.Button(nav, text="+ Contrat Futur",
                   bg="#1565C0", fg="white", font=("", 9, "bold"),
                   command=self._creer_previsionnel,
@@ -3890,7 +3895,7 @@ class OngletHistorique(tk.Frame):
             ("type",      "Type",         ["AEM", "BP", "CS", "CT", "STC"]),
             ("annee",     "Année",        None),
             ("mois",      "Mois",         list(self.MOIS_NUM)),
-            ("employeur", "Employeur",    None),
+            ("employeur", "Employeur",    sorted(charger_employeurs())),
             ("date_debut","Date début",   None),
             ("date_fin",  "Date fin",     None),
             ("heures",    "Heures",       None),
@@ -4097,6 +4102,34 @@ class OngletHistorique(tk.Frame):
         # Reconstruire le mapping iid → index
         self._iid_index = {c["_iid"]: i
                            for i, c in enumerate(self._contrats)}
+
+    def _scanner_doublons_mois(self):
+        """Cherche les prévisionnels correspondant à des contrats réels du
+        mois affiché (même logique que la déduplication automatique de
+        Suivi/Récap, mais restreinte à ce seul mois)."""
+        annee = self._annee_var.get()
+        mois  = self._mois_num_courant()
+        if not annee or not mois:
+            return
+
+        docs_reels = [c["info"] for c in self._contrats if not c.get("previsionnel")]
+        rapport = _deduplication_previsionnels(docs_reels)
+        en_attente_mois = [
+            p for p in rapport["en_attente"]
+            if p.get("annee") == annee and p.get("mois") == mois
+        ]
+
+        if not rapport["supprimes"] and not rapport["conflits"] and not en_attente_mois:
+            messagebox.showinfo(
+                "Scan doublons",
+                "Aucun doublon ni prévisionnel en attente pour ce mois.",
+                parent=self)
+        else:
+            _DialogueRapportDedup(self, rapport["supprimes"], rapport["conflits"],
+                                  en_attente_mois)
+
+        if rapport["supprimes"]:
+            self._actualiser_liste()
 
     @staticmethod
     def _info_depuis_nom(nom: str, annee: str, mois: str) -> dict:
