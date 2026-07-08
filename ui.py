@@ -4613,15 +4613,30 @@ class OngletRecap(tk.Frame):
         tk.Button(bar, text="↻ Actualiser", command=self.actualiser,
                   bg="#1976D2", fg="white", padx=10, pady=3).pack(side=tk.RIGHT, padx=4)
 
-        # ── Sélecteur d'année ──────────────────────────────────────────────
+        # ── Sélecteurs de filtre ─────────────────────────────────────────────
         bar2 = tk.Frame(self, padx=10)
         bar2.pack(fill=tk.X)
-        tk.Label(bar2, text="Filtrer par année :").pack(side=tk.LEFT)
+        tk.Label(bar2, text="Filtrer par période :").pack(side=tk.LEFT)
         self.var_annee = tk.StringVar(value="Toutes")
         self._combo_annee = ttk.Combobox(bar2, textvariable=self.var_annee,
-                                          width=10, state="readonly")
-        self._combo_annee.pack(side=tk.LEFT, padx=6)
+                                          width=26, state="readonly")
+        self._combo_annee.pack(side=tk.LEFT, padx=(6, 16))
         self._combo_annee.bind("<<ComboboxSelected>>", lambda e: self._filtrer())
+
+        tk.Label(bar2, text="Année civile :").pack(side=tk.LEFT)
+        self.var_annee_cal = tk.StringVar(value="Toutes")
+        self._combo_annee_cal = ttk.Combobox(bar2, textvariable=self.var_annee_cal,
+                                              width=8, state="readonly")
+        self._combo_annee_cal.pack(side=tk.LEFT, padx=(6, 16))
+        self._combo_annee_cal.bind("<<ComboboxSelected>>", lambda e: self._filtrer())
+
+        tk.Label(bar2, text="Mois :").pack(side=tk.LEFT)
+        self.var_mois = tk.StringVar(value="Tous")
+        self._combo_mois = ttk.Combobox(
+            bar2, textvariable=self.var_mois, width=12, state="readonly",
+            values=["Tous"] + [f"{num} {nom}" for num, nom in OngletHistorique.MOIS_LABELS])
+        self._combo_mois.pack(side=tk.LEFT, padx=6)
+        self._combo_mois.bind("<<ComboboxSelected>>", lambda e: self._filtrer())
 
         # ── Cartes de synthèse ─────────────────────────────────────────────
         self._frame_cartes = tk.Frame(self, padx=10, pady=6)
@@ -4814,6 +4829,12 @@ class OngletRecap(tk.Frame):
         if self.var_annee.get() not in ["Toutes"] + labels:
             self.var_annee.set("Toutes")
 
+        annees_cal = sorted(
+            {d.get("annee", "") for d in self._docs if d.get("annee")}, reverse=True)
+        self._combo_annee_cal["values"] = ["Toutes"] + annees_cal
+        if self.var_annee_cal.get() not in ["Toutes"] + annees_cal:
+            self.var_annee_cal.set("Toutes")
+
     def _filtrer(self):
         sel = self.var_annee.get()
         periodes = self._periodes_anniversaire()
@@ -4823,6 +4844,15 @@ class OngletRecap(tk.Frame):
         else:
             docs = [d for d in self._docs
                     if self._periode_de_doc(d, periodes) == sel]
+
+        sel_annee_cal = self.var_annee_cal.get()
+        if sel_annee_cal != "Toutes":
+            docs = [d for d in docs if d.get("annee", "") == sel_annee_cal]
+
+        sel_mois = self.var_mois.get()
+        if sel_mois != "Tous":
+            mois_num = sel_mois.split(" ")[0]
+            docs = [d for d in docs if d.get("mois", "") == mois_num]
 
         self._maj_cartes(docs, sel, periodes)
         self._maj_tableau(docs, periodes)
@@ -4920,7 +4950,7 @@ class OngletRecap(tk.Frame):
             tag = "previsionnel" if d.get("_previsionnel") else d.get("type", "").lower()
             self.tree.insert("", tk.END, values=(
                 d.get("annee", ""),
-                d.get("mois_nom", d.get("mois", "")),
+                OngletHistorique.MOIS_NOMS.get(d.get("mois", ""), d.get("mois", "")),
                 d.get("type", "") + (" ⏳" if d.get("_previsionnel") else ""),
                 d.get("employeur", ""),
                 f"{h:.1f} h" if h else "—",
