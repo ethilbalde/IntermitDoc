@@ -42,6 +42,8 @@ from classifier import (
     creer_structure_dossiers,
     lire_metadata_intermitdoc,
     _injecter_metadata,
+    _synchroniser_dossier_mois,
+    synchroniser_aem_vers_bp,
 )
 
 import theme as TH
@@ -3310,6 +3312,17 @@ class OngletScan(tk.Frame):
         tk.Label(row2, text="(dossier de base par défaut)",
                  fg="#888", font=("", 8)).pack(side=tk.LEFT, padx=6)
 
+        # ── Rattrapage heures/salaire AEM → BP ───────────────────────────────
+        row3 = tk.Frame(frame_top)
+        row3.pack(fill=tk.X, pady=(6, 2))
+        tk.Button(row3, text="🔗 Synchroniser AEM ↔ BP (heures/salaire)",
+                  command=self._synchroniser_aem_bp,
+                  bg="#5E35B1", fg="white", padx=8).pack(side=tk.LEFT)
+        tk.Label(row3,
+                 text="Complète les BP dont les heures/salaire manquent, "
+                      "à partir de l'AEM du même mois/employeur.",
+                 fg="#888", font=("", 8)).pack(side=tk.LEFT, padx=6)
+
         # ── Tableau ────────────────────────────────────────────────────────
         frame_tree = tk.LabelFrame(self, text="Fichiers classifiés trouvés", padx=4, pady=4)
         frame_tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
@@ -3367,6 +3380,43 @@ class OngletScan(tk.Frame):
         d = filedialog.askdirectory(title="Dossier de sortie (dossier de base)")
         if d:
             self.var_sortie.set(d)
+
+    def _synchroniser_aem_bp(self):
+        cfg = self._cfg_getter()
+        dossier = self.var_sortie.get().strip() or cfg.get("dossier_base", "")
+        if not dossier or not Path(dossier).is_dir():
+            messagebox.showwarning(
+                "Dossier invalide",
+                "Sélectionnez un dossier de sortie valide.", parent=self)
+            return
+        if not messagebox.askyesno(
+            "Synchroniser AEM ↔ BP",
+            f"Parcourir {dossier} et compléter les BP dont les heures/salaire "
+            "manquent avec les valeurs de l'AEM correspondant (même mois, "
+            "même employeur) ?\n\nLes fichiers déjà complets ne sont pas "
+            "modifiés.", parent=self):
+            return
+        rapport = synchroniser_aem_vers_bp(dossier)
+        n_sync = len(rapport["synchronises"])
+        n_sans = len(rapport["sans_correspondance"])
+        detail = ""
+        if rapport["synchronises"]:
+            detail += "Synchronisés :\n" + "\n".join(
+                f"  • {n}" for n in rapport["synchronises"][:30])
+            if n_sync > 30:
+                detail += f"\n  … et {n_sync - 30} de plus"
+        if rapport["sans_correspondance"]:
+            if detail:
+                detail += "\n\n"
+            detail += "Sans AEM correspondant :\n" + "\n".join(
+                f"  • {n}" for n in rapport["sans_correspondance"][:15])
+            if n_sans > 15:
+                detail += f"\n  … et {n_sans - 15} de plus"
+        messagebox.showinfo(
+            "Synchronisation terminée",
+            f"{n_sync} BP complété(s).\n{n_sans} sans AEM correspondant.\n\n"
+            + (detail or "Tous les BP étaient déjà complets."),
+            parent=self)
 
     def _scanner(self):
         source = self.var_source.get().strip()
@@ -6359,6 +6409,13 @@ class FenetrePrincipale(TkinterDnD.Tk if DND_DISPONIBLE else tk.Tk):
                 ligne.chemin_copie = res["chemin_destination"]
                 self._log(f"[OK]  Page {ligne.numero} -> {res['nom_fichier']}")
                 logger.info(f"[Classif] {res['nom_fichier']}")
+                # AEM/BP du même mois : compléter heures/salaire manquants
+                if ligne.analyse.get("type") in ("AEM", "BP"):
+                    try:
+                        dossier_mois = Path(res["chemin_destination"]).parent.parent
+                        _synchroniser_dossier_mois(dossier_mois)
+                    except Exception as e:
+                        logger.warning(f"[Sync AEM/BP] {e}")
                 # Enregistrer l'empreinte pour ne pas retraiter
                 chemin_src = ligne.info_page.get("chemin_source", "")
                 if chemin_src:
@@ -6395,6 +6452,7 @@ class FenetrePrincipale(TkinterDnD.Tk if DND_DISPONIBLE else tk.Tk):
                     self.tableau.mettre_a_jour_ligne(idx)
 
         nb_ok = nb_err = nb_fallback = nb_ignore = 0
+        dossiers_a_synchroniser = set()
         for idx in range(len(self.tableau.lignes)):
             ligne = self.tableau.lignes[idx]
 
@@ -6421,6 +6479,9 @@ class FenetrePrincipale(TkinterDnD.Tk if DND_DISPONIBLE else tk.Tk):
                     ligne.chemin_copie = res["chemin_destination"]
                     nb_ok += 1
                     self._log(f"[OK]  Page {ligne.numero} -> {res['nom_fichier']}")
+                    if ligne.analyse.get("type") in ("AEM", "BP"):
+                        dossiers_a_synchroniser.add(
+                            str(Path(res["chemin_destination"]).parent.parent))
                     chemin_src = ligne.info_page.get("chemin_source", "")
                     if chemin_src:
                         try:
@@ -6432,6 +6493,14 @@ class FenetrePrincipale(TkinterDnD.Tk if DND_DISPONIBLE else tk.Tk):
                 nb_err += 1
                 self._log(f"[ERR] Page {ligne.numero} : {res['erreur']}")
             self.tableau.mettre_a_jour_ligne(idx)
+
+        # AEM/BP du même mois : compléter heures/salaire manquants (une seule
+        # passe par dossier mois, pas par page, pour éviter de le rescanner)
+        for dossier_mois in dossiers_a_synchroniser:
+            try:
+                _synchroniser_dossier_mois(Path(dossier_mois))
+            except Exception as e:
+                logger.warning(f"[Sync AEM/BP] {e}")
 
         # Generer total.txt pour chaque dossier AEM concerne
         dossiers_aem = set()

@@ -285,3 +285,83 @@ def creer_structure_dossiers(config: dict) -> int:
                     d.mkdir(parents=True, exist_ok=True)
                     crees += 1
     return crees
+
+
+# ---------------------------------------------------------------------------
+# Synchronisation heures/salaire : AEM -> BP correspondant
+# ---------------------------------------------------------------------------
+# L'AEM et le BP d'un même mois/employeur couvrent la même période travaillée,
+# mais seule l'AEM bénéficie d'une extraction dédiée des heures et du salaire
+# brut. Cette synchro copie ces deux valeurs dans les métadonnées du BP quand
+# elles y manquent, sans toucher à ses autres champs (date_debut/date_fin du
+# BP restent les siens — construire_nom_fichier() n'utilise heures/salaire
+# que pour les AEM, donc le nom du fichier BP ne change jamais).
+
+def _synchroniser_dossier_mois(dossier_mois: Path) -> dict:
+    """Synchronise heures/salaire des AEM vers les BP d'un seul dossier mois."""
+    dossier_aem = dossier_mois / "AEM"
+    dossier_bp  = dossier_mois / "BP"
+    resultat = {"synchronises": [], "sans_correspondance": []}
+    if not dossier_bp.is_dir():
+        return resultat
+
+    aem_par_employeur: dict[str, dict] = {}
+    if dossier_aem.is_dir():
+        for pdf in dossier_aem.glob("*.pdf"):
+            meta = lire_metadata_intermitdoc(str(pdf))
+            if not meta:
+                continue
+            emp = (meta.get("employeur") or "").strip().lower()
+            if emp and (meta.get("heures") or meta.get("salaire")):
+                aem_par_employeur.setdefault(emp, meta)
+
+    for pdf in dossier_bp.glob("*.pdf"):
+        meta_bp = lire_metadata_intermitdoc(str(pdf))
+        if not meta_bp:
+            continue
+        if meta_bp.get("heures") and meta_bp.get("salaire"):
+            continue  # déjà complet
+
+        emp = (meta_bp.get("employeur") or "").strip().lower()
+        aem_meta = aem_par_employeur.get(emp)
+        if not aem_meta:
+            resultat["sans_correspondance"].append(pdf.name)
+            continue
+
+        info_maj = {
+            "type":        meta_bp.get("type", "BP"),
+            "annee":       meta_bp.get("annee", ""),
+            "mois":        meta_bp.get("mois", ""),
+            "employeur":   meta_bp.get("employeur", ""),
+            "date_debut":  meta_bp.get("date_debut", ""),
+            "date_fin":    meta_bp.get("date_fin", ""),
+            "heures":      meta_bp.get("heures") or aem_meta.get("heures", ""),
+            "salaire_brut": meta_bp.get("salaire") or aem_meta.get("salaire", ""),
+        }
+        try:
+            pdf.write_bytes(_injecter_metadata(pdf.read_bytes(), info_maj))
+            resultat["synchronises"].append(pdf.name)
+        except Exception:
+            resultat["sans_correspondance"].append(pdf.name)
+
+    return resultat
+
+
+def synchroniser_aem_vers_bp(dossier_base: str) -> dict:
+    """
+    Parcourt tout dossier_base (ANNEE/MOIS) et copie heures/salaire brut des
+    AEM vers leurs BP correspondants (même mois, même employeur) quand ces
+    valeurs manquent au BP. Retourne un rapport global.
+    """
+    base = Path(dossier_base)
+    total = {"synchronises": [], "sans_correspondance": []}
+    if not base.is_dir():
+        return total
+    for dossier_annee in sorted(p for p in base.iterdir() if p.is_dir()):
+        for dossier_mois in sorted(p for p in dossier_annee.iterdir() if p.is_dir()):
+            res = _synchroniser_dossier_mois(dossier_mois)
+            prefixe = f"{dossier_annee.name}/{dossier_mois.name}/BP/"
+            total["synchronises"].extend(prefixe + n for n in res["synchronises"])
+            total["sans_correspondance"].extend(
+                prefixe + n for n in res["sans_correspondance"])
+    return total
