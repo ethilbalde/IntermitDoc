@@ -3719,7 +3719,8 @@ class OngletHistorique(tk.Frame):
     MOIS_NOMS  = {m: n for m, n in MOIS_LABELS}
 
     COL = [
-        ("date",      "Date",         90),
+        ("date_debut","Date début",   80),
+        ("date_fin",  "Date fin",     80),
         ("employeur", "Employeur",   150),
         ("heures",    "Heures",       60),
         ("salaire",   "Salaire",      80),
@@ -4019,13 +4020,18 @@ class OngletHistorique(tk.Frame):
 
         for i, c in enumerate(self._contrats):
             info = c["info"]
-            date_str = f"{info.get('annee','')}-{info.get('mois','')}-{info.get('date_debut','')}"
+            annee_mois = f"{info.get('annee','')}-{info.get('mois','')}"
+            jour_debut = info.get("date_debut", "")
+            jour_fin   = info.get("date_fin", "") or jour_debut
+            date_debut_str = f"{annee_mois}-{jour_debut}" if jour_debut else ""
+            date_fin_str   = f"{annee_mois}-{jour_fin}" if jour_fin else ""
             heures  = info.get("heures", "")
             salaire = info.get("salaire", info.get("salaire_brut", ""))
             statut  = "Prévisionnel" if c["previsionnel"] else "Classifié"
             tag     = "previsionnel" if c["previsionnel"] else "classifie"
             iid = self.tree.insert("", tk.END, tags=(tag,),
-                                   values=(date_str,
+                                   values=(date_debut_str,
+                                           date_fin_str,
                                            info.get("employeur", ""),
                                            f"{heures}h" if heures else "",
                                            f"{salaire}€" if salaire else "",
