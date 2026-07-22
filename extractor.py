@@ -100,82 +100,57 @@ def extraire_page_comme_pdf(doc_source: fitz.Document, numero_page: int) -> byte
 
 def extraire_valeurs_aem_natif(page: fitz.Page) -> dict:
     """
-    Extraction par coordonnees pour les AEM en PDF natif (non scanne).
-    Le formulaire AEM standardise place toujours :
-      - Heures     : premier nombre entier en colonne gauche (x < 200), apres la section dates
-      - Salaire brut : premier nombre decimal en colonne gauche sur la ligne remunerations
+    Extraction par ancrage sur les libellés du formulaire AEM (recherche de
+    texte), pour les PDF natifs (non scannes).
+
+    Une version antérieure repérait heures/salaire par position pure
+    (colonne gauche, ordre d'apparition) sans jamais lire le texte des
+    libellés. Elle confondait parfois les numéros de section du formulaire
+    ("1 ATTESTATION (AEM)", "2 EMPLOYEUR"...) — des chiffres isolés en marge
+    gauche — avec les vraies valeurs, quand ils tombaient par coïncidence
+    sur la même ligne qu'un autre nombre (ex: les cases jour/année du champ
+    MOIS). Ancrer sur le texte du libellé ("effectuées", "SALAIRES BRUTS
+    ... soumis") élimine ce risque : on ne regarde que les nombres proches
+    du bon libellé, peu importe le reste de la page.
     """
     import re
 
-    items = []  # (x, y, texte)
-    for b in page.get_text("dict")["blocks"]:
-        for line in b.get("lines", []):
-            txt = " ".join(s["text"] for s in line["spans"]).strip()
-            if txt:
-                bbox = line["bbox"]
-                items.append((bbox[0], bbox[1], txt))
+    def _nombres_isoles() -> list:
+        out = []
+        for b in page.get_text("dict")["blocks"]:
+            for line in b.get("lines", []):
+                txt = " ".join(s["text"] for s in line["spans"]).strip()
+                if txt and re.fullmatch(r'\d+([.,]\d+)?', txt):
+                    out.append((line["bbox"][0], line["bbox"][1], txt))
+        return out
 
-    # Garder seulement les elements qui sont EXACTEMENT un nombre (pas de texte mixte)
-    import re as _re
-    numeros = []
-    for x, y, txt in items:
-        txt_strip = txt.strip()
-        # Accepter uniquement : chiffres seuls, avec virgule ou point decimal
-        # Rejeter : textes avec espaces internes (ex: "0  4"), textes alphanumeriques
-        if _re.fullmatch(r'\d+([.,]\d+)?', txt_strip):
-            val = txt_strip.replace(",", ".")
-            try:
-                f = float(val)
-                if f > 0:
-                    numeros.append((x, y, f, txt_strip))
-            except ValueError:
-                pass
+    def _nombre_proche(label_rect, nombres, x_tol=40, y_max=40) -> str:
+        """Nombre isolé le plus proche juste en dessous du libellé (même x)."""
+        candidats = []
+        for x, y, txt in nombres:
+            dy = y - label_rect.y1
+            dx = abs(x - label_rect.x0)
+            if 0 <= dy <= y_max and dx <= x_tol:
+                candidats.append((dy, dx, txt))
+        if not candidats:
+            return ""
+        candidats.sort()
+        return candidats[0][2].replace(",", ".")
 
-    if not numeros:
+    nombres = _nombres_isoles()
+    if not nombres:
         return {"heures": "", "salaire_brut": ""}
 
-    # Grouper par ligne (meme y a +-8px)
-    def meme_ligne(y1, y2):
-        return abs(y1 - y2) < 8
+    heures = ""
+    rects_heures = page.search_for("effectu")  # "Nombre d'HEURES effectuées"
+    if rects_heures:
+        heures = _nombre_proche(rects_heures[0], nombres)
 
-    lignes = []
-    for num in sorted(numeros, key=lambda n: (round(n[1]/8)*8, n[0])):
-        x, y, f, txt = num
-        place = False
-        for lig in lignes:
-            if meme_ligne(lig[0][1], y):
-                lig.append(num)
-                place = True
-                break
-        if not place:
-            lignes.append([num])
-
-    heures       = ""
     salaire_brut = ""
-
-    for lig in lignes:
-        if len(lig) < 2:
-            continue
-        lig_sorted = sorted(lig, key=lambda n: n[0])  # trier par x
-        x0, y0, f0, txt0 = lig_sorted[0]
-        x1, y1, f1, txt1 = lig_sorted[1]
-
-        # Ligne heures/cachets :
-        # - 2 nombres sur la meme ligne
-        # - le premier (x < 200) est un entier petit (1-999)
-        # - le deuxieme est aussi un petit entier ou proche
-        # - les deux sont x < 400
-        if (x0 < 200 and x1 < 400
-                and f0 == int(f0) and f0 < 1000
-                and not heures):
-            heures = str(int(f0))
-
-        # Ligne salaire/taux :
-        # - premier nombre en x < 300, valeur decimale (ou entier > 20)
-        # - deuxieme nombre est un taux entre 1 et 30 (12.15%)
-        if (x0 < 300 and 1 < f1 < 30
-                and not salaire_brut):
-            salaire_brut = txt0.replace(",", ".")
+    rects_salaires = page.search_for("SALAIRES BRUTS")
+    if len(rects_salaires) >= 2:
+        # 2e colonne = "... soumis à contributions d'assurance chômage"
+        salaire_brut = _nombre_proche(rects_salaires[1], nombres)
 
     return {"heures": heures, "salaire_brut": salaire_brut}
 
