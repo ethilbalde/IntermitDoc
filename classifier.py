@@ -38,6 +38,10 @@ def _injecter_metadata(pdf_bytes: bytes, info: dict) -> bytes:
             "employeur":  info.get("employeur", ""),
             "date_debut": info.get("date_debut", ""),
             "date_fin":   info.get("date_fin", ""),
+            # Contrat chevauchant deux mois (AEM) : vide si même mois que
+            # annee/mois — voir construire_nom_fichier().
+            "annee_debut": info.get("annee_debut", "") or "",
+            "mois_debut":  info.get("mois_debut", "") or "",
             "heures":     info.get("heures", ""),
             "salaire":    info.get("salaire_brut", ""),
             "traite":     str(_date.today()),
@@ -100,9 +104,20 @@ def construire_nom_fichier(info: dict) -> str:
     date_debut = info.get("date_debut", "")
     date_fin   = info.get("date_fin", date_debut)
     employeur  = info.get("employeur", "INCONNU")
+    annee_debut = info.get("annee_debut", "") or annee
+    mois_debut  = info.get("mois_debut", "") or mois
 
-    # Partie date : YYYY-MM-DD ou YYYY-MM-DD_DD (periode)
-    if date_debut and date_fin and date_debut != date_fin:
+    # Contrat chevauchant deux mois (ex: AEM embauchee en juin, fin de
+    # contrat en juillet) : le fichier reste classe dans le mois de fin
+    # (annee/mois), mais affiche la vraie date de debut complete au lieu
+    # de perdre son mois d'origine.
+    chevauche_mois = (annee_debut, mois_debut) != (annee, mois)
+
+    # Partie date : YYYY-MM-DD ou YYYY-MM-DD_DD (periode), ou
+    # YYYY-MM-DD_YYYY-MM-DD si le contrat chevauche deux mois
+    if chevauche_mois and date_debut:
+        partie_date = f"{annee_debut}-{mois_debut}-{date_debut}_{annee}-{mois}-{date_fin}"
+    elif date_debut and date_fin and date_debut != date_fin:
         partie_date = f"{annee}-{mois}-{date_debut}_{date_fin}"
     elif date_debut:
         partie_date = f"{annee}-{mois}-{date_debut}"

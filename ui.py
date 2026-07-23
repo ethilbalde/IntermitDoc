@@ -1330,7 +1330,7 @@ class TableauPages(tk.Frame):
 # ---------------------------------------------------------------------------
 _RE_TOUT_DOC = re.compile(
     r'^\[([A-Z]+)\]\s+'
-    r'(\d{4}-\d{2}-\d{2})(?:_(\d{2}))?'   # date_debut + optional _jour_fin
+    r'(\d{4}-\d{2}-\d{2})(?:_(\d{2}|\d{4}-\d{2}-\d{2}))?'   # date_debut + optional _fin (jour, ou date complete si chevauche 2 mois)
     r'\s+(.*?)'                              # employeur
     r'(?:\s+(\d+(?:\.\d+)?)h)?'             # heures (optionnel)
     r'(?:\s+(\d+(?:\.\d+)?)EUR)?'           # salaire (optionnel)
@@ -1346,16 +1346,22 @@ def _parser_nom_doc(nom: str) -> dict | None:
         return None
     type_doc   = m.group(1).upper()
     date_debut = m.group(2)
-    jour_fin   = m.group(3)
+    fin_brut   = m.group(3)
     employeur  = m.group(4).strip()
     heures     = m.group(5) or ""
     salaire    = m.group(6) or ""
-    date_fin   = f"{date_debut[:7]}-{jour_fin.zfill(2)}" if jour_fin else date_debut
+    if fin_brut and len(fin_brut) == 10:
+        # Contrat chevauchant deux mois (ex: AEM) : date complete deja fournie
+        date_fin = fin_brut
+    else:
+        date_fin = f"{date_debut[:7]}-{fin_brut.zfill(2)}" if fin_brut else date_debut
+    # annee/mois = mois de classement = celui de date_fin (coincide toujours
+    # avec le dossier physique, meme si date_debut est dans le mois d'avant)
     return {
         "nom":        nom,
         "type":       type_doc,
-        "annee":      date_debut[:4],
-        "mois":       date_debut[5:7],
+        "annee":      date_fin[:4],
+        "mois":       date_fin[5:7],
         "date_debut": date_debut,
         "date_fin":   date_fin,
         "employeur":  employeur,
@@ -3342,11 +3348,15 @@ class OngletScan(tk.Frame):
 
             annee = meta.get("annee", "")
             mois  = meta.get("mois",  "")
+            # Contrat chevauchant deux mois (AEM) : la date de début a son
+            # propre mois/année si différent du mois de classement.
+            annee_d = meta.get("annee_debut", "") or annee
+            mois_d  = meta.get("mois_debut", "") or mois
             jour_debut = meta.get("date_debut", "")
             jour_fin   = meta.get("date_fin", "") or jour_debut
             info = {
                 "type":       meta.get("type", ""),
-                "date_debut": (f"{annee}-{mois}-{jour_debut}" if jour_debut
+                "date_debut": (f"{annee_d}-{mois_d}-{jour_debut}" if jour_debut
                                else f"{annee}-{mois}-01" if annee and mois else ""),
                 "date_fin":   f"{annee}-{mois}-{jour_fin}" if jour_fin else "",
                 "employeur":  meta.get("employeur", ""),
@@ -3976,6 +3986,8 @@ class OngletHistorique(tk.Frame):
                             "salaire":    meta.get("salaire", ""),
                             "date_debut": meta.get("date_debut", ""),
                             "date_fin":   meta.get("date_fin", ""),
+                            "annee_debut": meta.get("annee_debut", ""),
+                            "mois_debut":  meta.get("mois_debut", ""),
                         }
                     else:
                         # PDF sans métadonnées IntermitDoc — extraire du nom
@@ -3993,9 +4005,14 @@ class OngletHistorique(tk.Frame):
         for i, c in enumerate(self._contrats):
             info = c["info"]
             annee_mois = f"{info.get('annee','')}-{info.get('mois','')}"
+            # Contrat chevauchant deux mois (AEM) : la date de début garde
+            # son propre mois/année si différent du mois de classement.
+            annee_debut = info.get("annee_debut", "") or info.get("annee", "")
+            mois_debut  = info.get("mois_debut", "") or info.get("mois", "")
+            annee_mois_debut = f"{annee_debut}-{mois_debut}"
             jour_debut = info.get("date_debut", "")
             jour_fin   = info.get("date_fin", "") or jour_debut
-            date_debut_str = f"{annee_mois}-{jour_debut}" if jour_debut else ""
+            date_debut_str = f"{annee_mois_debut}-{jour_debut}" if jour_debut else ""
             date_fin_str   = f"{annee_mois}-{jour_fin}" if jour_fin else ""
             heures  = info.get("heures", "")
             salaire = info.get("salaire", info.get("salaire_brut", ""))
@@ -4059,15 +4076,27 @@ class OngletHistorique(tk.Frame):
     @staticmethod
     def _info_depuis_nom(nom: str, annee: str, mois: str) -> dict:
         pat = re.compile(
-            r"\[AEM\]\s*(\d{4})-(\d{2})-(\d{2})(?:_(\d+))?\s+"
+            r"\[AEM\]\s*(\d{4})-(\d{2})-(\d{2})(?:_(\d{2}|\d{4}-\d{2}-\d{2}))?\s+"
             r"(.+?)\s+(\d+(?:[.,]\d+)?)h\s*(\d+(?:[.,]\d+)?)(?:EUR)?",
             re.IGNORECASE,
         )
         m = pat.search(nom)
         if m:
+            annee_d, mois_d, jour_d = m.group(1), m.group(2), m.group(3)
+            fin_brut = m.group(4)
+            if fin_brut and len(fin_brut) == 10:
+                # Contrat chevauchant deux mois : date de fin deja complete
+                date_fin = fin_brut
+                annee_f, mois_f = date_fin[:4], date_fin[5:7]
+            else:
+                date_fin = fin_brut or jour_d
+                annee_f, mois_f = annee_d, mois_d
+            chevauche = (annee_f, mois_f) != (annee_d, mois_d)
             return {
-                "type": "AEM", "annee": m.group(1), "mois": m.group(2),
-                "date_debut": m.group(3), "date_fin": m.group(4) or m.group(3),
+                "type": "AEM", "annee": annee_f, "mois": mois_f,
+                "date_debut": jour_d, "date_fin": date_fin,
+                "annee_debut": annee_d if chevauche else "",
+                "mois_debut":  mois_d if chevauche else "",
                 "employeur": m.group(5).strip(),
                 "heures": m.group(6).replace(",", "."),
                 "salaire": m.group(7).replace(",", "."),

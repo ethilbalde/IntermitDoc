@@ -32,10 +32,20 @@ TYPES DE DOCUMENTS :
 
 REGLES D EXTRACTION :
 - Employeur : nom de l entreprise/association qui emploie (pas le salarie).
-- Annee : format YYYY
-- Mois : format MM sur 2 chiffres (01-12)
-- Date debut : format DD sur 2 chiffres
+- Annee / Mois : le mois de CLASSEMENT du document (celui de la date de FIN
+  de periode/contrat pour une AEM ; le mois du bulletin pour un BP, etc.)
+- Date debut : format DD sur 2 chiffres, jour dans le mois de FIN ci-dessus
 - Date fin : format DD sur 2 chiffres (dernier jour si periode)
+- annee_debut / mois_debut (AEM uniquement, sinon omettre ou laisser vide) :
+  Une AEM a deux champs de date distincts : "Date d'embauche (Date de debut
+  du contrat)" et "Date de fin du contrat de travail". Si ces deux dates
+  tombent dans des MOIS DIFFERENTS (ex: embauche 22/06/2026, fin de contrat
+  20/07/2026 -- un contrat qui chevauche deux mois civils), renseigne
+  annee_debut/mois_debut avec l annee/mois de la date d embauche, et mets
+  date_debut au jour de cette date d embauche (22, pas 20). annee/mois
+  restent ceux de la date de fin de contrat (mois de classement). Si les
+  deux dates sont dans le meme mois (cas normal), laisse annee_debut et
+  mois_debut vides ("").
 - Confiance : valeur entre 0.0 et 1.0
 
 REPONSE OBLIGATOIREMENT EN JSON valide, aucun texte avant ou apres :
@@ -45,9 +55,26 @@ REPONSE OBLIGATOIREMENT EN JSON valide, aucun texte avant ou apres :
   "mois": "03",
   "date_debut": "01",
   "date_fin": "31",
+  "annee_debut": "",
+  "mois_debut": "",
   "employeur": "Productions XYZ",
   "confiance": 0.95,
   "notes": "Bulletin de paie Mars 2024"
+}
+
+Exemple AEM chevauchant deux mois (embauche 22/06/2026, fin de contrat
+20/07/2026, mois de classement = juillet) :
+{
+  "type": "AEM",
+  "annee": "2026",
+  "mois": "07",
+  "date_debut": "22",
+  "date_fin": "20",
+  "annee_debut": "2026",
+  "mois_debut": "06",
+  "employeur": "La Vouivre",
+  "confiance": 0.95,
+  "notes": "AEM juillet, contrat debute en juin"
 }"""
 
 
@@ -82,7 +109,7 @@ Salaire brut : nombre decimal avec point sans symbole (ex: "180.52", "2500.00").
 _RE_NOM_CLASSIFIE = re.compile(
     r'^\[(?P<type>AEM|BP|CS|CT|STC|INCONNU)\]\s+'
     r'(?P<annee>\d{4})-(?P<mois>\d{2})-(?P<debut>\d{2})'
-    r'(?:_(?P<fin>\d{2}))?'
+    r'(?:_(?P<fin>\d{2}|\d{4}-\d{2}-\d{2}))?'
     r'\s+(?P<employeur>.+?)'
     r'(?:\s+(?P<heures>\d+(?:\.\d+)?)h)?'
     r'(?:\s+(?P<salaire>\d+(?:\.\d+)?)EUR)?'
@@ -100,12 +127,25 @@ def analyser_nom_fichier(nom_fichier: str) -> dict | None:
     m = _RE_NOM_CLASSIFIE.match(nom_fichier.strip())
     if not m:
         return None
+    annee_debut, mois_debut, debut = m.group("annee"), m.group("mois"), m.group("debut")
+    fin_brut = m.group("fin")
+    if fin_brut and len(fin_brut) == 10:
+        # Contrat chevauchant deux mois : le fin fournit deja annee/mois
+        # de classement (celui du dossier physique)
+        date_fin = fin_brut
+        annee, mois = date_fin[:4], date_fin[5:7]
+    else:
+        date_fin = fin_brut or debut
+        annee, mois = annee_debut, mois_debut
+    chevauche = (annee, mois) != (annee_debut, mois_debut)
     return {
         "type":        m.group("type").upper(),
-        "annee":       m.group("annee"),
-        "mois":        m.group("mois"),
-        "date_debut":  m.group("debut"),
-        "date_fin":    m.group("fin") or m.group("debut"),
+        "annee":       annee,
+        "mois":        mois,
+        "date_debut":  debut,
+        "date_fin":    date_fin,
+        "annee_debut": annee_debut if chevauche else "",
+        "mois_debut":  mois_debut if chevauche else "",
         "employeur":   m.group("employeur").strip(),
         "heures":      m.group("heures") or "",
         "salaire_brut":m.group("salaire") or "",
@@ -379,9 +419,19 @@ def _parser_reponse(contenu: str) -> dict:
     confiance  = _valider_confiance(data.get("confiance", 0.5))
     notes      = str(data.get("notes", ""))[:200]
 
+    # Contrat chevauchant deux mois (ex: AEM du 22/06 au 20/07) : annee/mois
+    # restent le mois de classement (celui de date_fin) ; annee_debut/mois_debut
+    # ne sont renseignés que s'ils diffèrent réellement, pour reconstruire la
+    # vraie date de début complète dans le nom de fichier.
+    annee_debut = _valider_annee(data.get("annee_debut", "")) or annee
+    mois_debut  = _valider_mois(data.get("mois_debut", "")) or mois
+    if annee_debut == annee and mois_debut == mois:
+        annee_debut = mois_debut = ""
+
     return {
         "type": type_doc, "annee": annee, "mois": mois,
         "date_debut": date_debut, "date_fin": date_fin,
+        "annee_debut": annee_debut, "mois_debut": mois_debut,
         "employeur": employeur, "confiance": confiance,
         "notes": notes, "erreur": None,
         "heures": "", "salaire_brut": "",
@@ -391,6 +441,7 @@ def _parser_reponse(contenu: str) -> dict:
 def _resultat_inconnu(raison: str) -> dict:
     return {
         "type": "INCONNU", "annee": "", "mois": "", "date_debut": "", "date_fin": "",
+        "annee_debut": "", "mois_debut": "",
         "employeur": "", "confiance": 0.0, "notes": "", "erreur": raison,
         "heures": "", "salaire_brut": "",
     }
