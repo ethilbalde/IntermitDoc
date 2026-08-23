@@ -1146,6 +1146,12 @@ class TableauPages(tk.Frame):
         scroll_v = tk.Scrollbar(self, orient=tk.VERTICAL)
         scroll_h = tk.Scrollbar(self, orient=tk.HORIZONTAL)
 
+        # Style dédié : la ligne doit être assez haute pour la miniature
+        # (voir _creer_photo) — sinon l'image déborde sur les lignes
+        # suivantes et donne une impression d'empilement illisible.
+        style = ttk.Style()
+        style.configure("Apercu.Treeview", rowheight=100)
+
         self.tree = ttk.Treeview(
             self,
             columns=[c[0] for c in self.COLONNES],
@@ -1154,6 +1160,7 @@ class TableauPages(tk.Frame):
             xscrollcommand=scroll_h.set,
             height=14,
             selectmode="browse",
+            style="Apercu.Treeview",
         )
         scroll_v.config(command=self.tree.yview)
         scroll_h.config(command=self.tree.xview)
@@ -1260,7 +1267,7 @@ class TableauPages(tk.Frame):
             return None
         try:
             img = Image.open(io.BytesIO(data))
-            img.thumbnail((80, 110))
+            img.thumbnail((80, 92))  # tient dans rowheight=100 (style Apercu.Treeview)
             return ImageTk.PhotoImage(img)
         except Exception:
             return None
@@ -6078,11 +6085,39 @@ class FenetrePrincipale(TkinterDnD.Tk if DND_DISPONIBLE else tk.Tk):
 
         ttk.Separator(parent, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=10, pady=2)
 
-        # Tableau
+        # Tableau (gauche) + panneau d'actions (droite)
         frame_milieu = tk.Frame(parent)
         frame_milieu.pack(fill=tk.BOTH, expand=True, padx=10)
+
+        frame_actions = tk.Frame(frame_milieu, padx=(10, 0))
+        frame_actions.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.btn_classifier = tk.Button(
+            frame_actions, text="✓ Classifier tout",
+            command=self._classifier_tout,
+            bg=TH.BTN_SUCCESS[0], fg=TH.BTN_SUCCESS[1],
+            font=TH.FONT_HEADING,
+            padx=14, pady=10, width=18,
+            relief=tk.FLAT, cursor="hand2",
+            state=tk.DISABLED,
+        )
+        self.btn_classifier.pack(fill=tk.X, pady=(4, 8))
+        self.btn_classifier_sel = tk.Button(
+            frame_actions, text="Classifier sélection",
+            command=self._classifier_selection,
+            font=TH.FONT_BODY,
+            padx=14, pady=8, width=18,
+            relief=tk.FLAT, cursor="hand2",
+            state=tk.DISABLED,
+        )
+        self.btn_classifier_sel.pack(fill=tk.X, pady=8)
+        tk.Button(frame_actions, text="Vider",
+                  command=self._vider_tableau,
+                  font=TH.FONT_BODY,
+                  padx=14, pady=8, width=18).pack(fill=tk.X, pady=8)
+
         self.tableau = TableauPages(frame_milieu, app=self)
-        self.tableau.pack(fill=tk.BOTH, expand=True)
+        self.tableau.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         # Progression
         frame_progress = tk.Frame(parent)
@@ -6091,29 +6126,6 @@ class FenetrePrincipale(TkinterDnD.Tk if DND_DISPONIBLE else tk.Tk):
         self.lbl_progress.pack(side=tk.LEFT, fill=tk.X, expand=True)
         self.progress = ttk.Progressbar(frame_progress, mode="determinate", length=300)
         self.progress.pack(side=tk.RIGHT, padx=6)
-
-        # Boutons action
-        frame_bas = tk.Frame(parent, pady=4)
-        frame_bas.pack(fill=tk.X, padx=10)
-        self.btn_classifier = tk.Button(
-            frame_bas, text="Classifier tout",
-            command=self._classifier_tout,
-            bg=TH.BTN_SUCCESS[0], fg=TH.BTN_SUCCESS[1],
-            padx=10, pady=3,
-            relief=tk.FLAT, cursor="hand2",
-            state=tk.DISABLED,
-        )
-        self.btn_classifier.pack(side=tk.LEFT, padx=4)
-        self.btn_classifier_sel = tk.Button(
-            frame_bas, text="Classifier sélection",
-            command=self._classifier_selection,
-            padx=10, pady=3,
-            relief=tk.FLAT, cursor="hand2",
-            state=tk.DISABLED,
-        )
-        self.btn_classifier_sel.pack(side=tk.LEFT, padx=4)
-        tk.Button(frame_bas, text="Vider",
-                  command=self._vider_tableau, padx=10).pack(side=tk.LEFT, padx=4)
 
         # Journal
         self.log = scrolledtext.ScrolledText(parent, height=5, state=tk.DISABLED,
