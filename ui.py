@@ -6089,8 +6089,8 @@ class FenetrePrincipale(TkinterDnD.Tk if DND_DISPONIBLE else tk.Tk):
         frame_milieu = tk.Frame(parent)
         frame_milieu.pack(fill=tk.BOTH, expand=True, padx=10)
 
-        frame_actions = tk.Frame(frame_milieu, padx=(10, 0))
-        frame_actions.pack(side=tk.RIGHT, fill=tk.Y)
+        frame_actions = tk.Frame(frame_milieu)
+        frame_actions.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
 
         self.btn_classifier = tk.Button(
             frame_actions, text="✓ Classifier tout",
