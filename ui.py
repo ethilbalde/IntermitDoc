@@ -3684,6 +3684,10 @@ from previsionnel import (
     supprimer_previsionnel as _supprimer_previsionnel_hist,
     _periodes_se_chevauchent,
 )
+from agenda import (
+    charger_config_agenda, sauvegarder_config_agenda, importer_evenements,
+    telecharger_ics, parser_ics,
+)
 
 
 class OngletHistorique(tk.Frame):
@@ -3756,6 +3760,11 @@ class OngletHistorique(tk.Frame):
         tk.Button(nav, text="+ Contrat Futur",
                   bg="#1565C0", fg="white", font=("", 9, "bold"),
                   command=self._creer_previsionnel,
+                  pady=2, padx=8).pack(side=tk.RIGHT, padx=6)
+
+        tk.Button(nav, text="📅 Agenda...",
+                  bg="#00838F", fg="white", font=("", 9, "bold"),
+                  command=self._ouvrir_dialogue_agenda,
                   pady=2, padx=8).pack(side=tk.RIGHT, padx=6)
 
         # ── Corps principal : liste à gauche, formulaire à droite ──────────
@@ -4322,6 +4331,14 @@ class OngletHistorique(tk.Frame):
         _supprimer_previsionnel_hist(prev_id)
         self._actualiser_liste()
 
+    # ── Import agenda Google (ICS) ───────────────────────────────────────────
+
+    def _ouvrir_dialogue_agenda(self):
+        dlg = _DialogueAgenda(self)
+        self.wait_window(dlg)
+        if dlg.a_importe:
+            self._actualiser_liste()
+
     # ── Création contrat futur ───────────────────────────────────────────────
 
     def _creer_previsionnel(self):
@@ -4629,6 +4646,219 @@ class _DialogueContratFutur(tk.Toplevel):
     def _reset_dedup(self):
         global _dedup_en_cours
         _dedup_en_cours = False
+
+
+class _DialogueAgenda(tk.Toplevel):
+    """Configuration du lien agenda (ICS), des tags de repérage perso et des
+    liaisons mot-clé → employeur/type, + lancement de l'import."""
+
+    TYPES = ["AEM", "BP", "CS", "CT", "STC"]
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("Import agenda Google")
+        self.resizable(False, False)
+        self.grab_set()
+        self.a_importe = False
+        self._cfg = charger_config_agenda()
+        self._construire()
+        self.transient(parent)
+
+    def _construire(self):
+        pad = {"padx": 10, "pady": 4}
+
+        # ── Connexion à Google Agenda ────────────────────────────────────────
+        f_url = tk.LabelFrame(self, text="🔗 Connexion à Google Agenda", padx=10, pady=8)
+        f_url.pack(fill=tk.X, padx=10, pady=(10, 4))
+        tk.Label(f_url, text="1. Sur calendar.google.com → ⚙ Paramètres → cliquez sur "
+                 "votre agenda dans la colonne de gauche.\n"
+                 "2. Section \"Intégrer l'agenda\" → copiez l'\"Adresse secrète au "
+                 "format iCal\" (se termine par .ics).\n"
+                 "3. Collez-la ci-dessous puis cliquez sur Tester la connexion.",
+                 wraplength=440, justify="left", fg="#555").pack(anchor="w")
+        self._var_url = tk.StringVar(value=self._cfg.get("url_ics", ""))
+        tk.Entry(f_url, textvariable=self._var_url, width=60).pack(
+            fill=tk.X, pady=(6, 4))
+        self._lbl_statut_connexion = tk.Label(f_url, text="", fg="#555")
+        self._lbl_statut_connexion.pack(anchor="w")
+        tk.Button(f_url, text="🔌 Tester la connexion",
+                  command=self._tester_connexion).pack(anchor="w", pady=(4, 0))
+
+        # ── Tags de repérage perso ──────────────────────────────────────────
+        f_tags = tk.LabelFrame(self, text="Tags qui marquent un évènement de travail",
+                                padx=10, pady=8)
+        f_tags.pack(fill=tk.X, padx=10, pady=4)
+        tk.Label(f_tags, text="Seuls les évènements dont le titre contient un de ces "
+                 "tags seront pris en compte (le reste est ignoré). "
+                 "Ajoutez les vôtres, ce sont vos propres repères d'agenda.",
+                 wraplength=440, justify="left", fg="#555").pack(anchor="w")
+
+        ligne_tags = tk.Frame(f_tags)
+        ligne_tags.pack(fill=tk.X, pady=(6, 0))
+        self._liste_tags = tk.Listbox(ligne_tags, height=4, width=20)
+        for tag in self._cfg.get("tags_travail", []):
+            self._liste_tags.insert(tk.END, tag)
+        self._liste_tags.pack(side=tk.LEFT)
+
+        f_tags_btn = tk.Frame(ligne_tags)
+        f_tags_btn.pack(side=tk.LEFT, padx=8, anchor="n")
+        self._var_nouveau_tag = tk.StringVar()
+        tk.Entry(f_tags_btn, textvariable=self._var_nouveau_tag,
+                 width=14).pack(pady=(0, 4))
+        tk.Button(f_tags_btn, text="+ Ajouter", command=self._ajouter_tag,
+                  pady=1).pack(fill=tk.X, pady=(0, 2))
+        tk.Button(f_tags_btn, text="− Retirer", command=self._retirer_tag,
+                  pady=1).pack(fill=tk.X)
+
+        # ── Liaisons mot-clé → employeur/type ───────────────────────────────
+        f_liaisons = tk.LabelFrame(
+            self, text="Liaisons mot-clé du titre → employeur / type",
+            padx=10, pady=8)
+        f_liaisons.pack(fill=tk.BOTH, padx=10, pady=4)
+
+        cols = ("mot_cle", "employeur", "type")
+        self._tree = ttk.Treeview(f_liaisons, columns=cols, show="headings",
+                                   height=5, selectmode="browse")
+        for cid, label, w in [("mot_cle", "Mot-clé", 120),
+                               ("employeur", "Employeur", 180),
+                               ("type", "Type", 60)]:
+            self._tree.heading(cid, text=label)
+            self._tree.column(cid, width=w, anchor="w")
+        self._tree.pack(fill=tk.X)
+        for liaison in self._cfg.get("liaisons", []):
+            self._tree.insert("", tk.END, values=(
+                liaison.get("mot_cle", ""), liaison.get("employeur", ""),
+                liaison.get("type", "AEM")))
+
+        f_liaison_form = tk.Frame(f_liaisons)
+        f_liaison_form.pack(fill=tk.X, pady=(6, 0))
+        from config import charger_employeurs
+        employeurs_connus = charger_employeurs()
+
+        tk.Label(f_liaison_form, text="Mot-clé :").grid(row=0, column=0, padx=2)
+        self._var_mot_cle = tk.StringVar()
+        tk.Entry(f_liaison_form, textvariable=self._var_mot_cle,
+                 width=14).grid(row=0, column=1, padx=2)
+
+        tk.Label(f_liaison_form, text="Employeur :").grid(row=0, column=2, padx=2)
+        self._var_employeur = tk.StringVar()
+        ttk.Combobox(f_liaison_form, textvariable=self._var_employeur,
+                     values=employeurs_connus, width=16).grid(row=0, column=3, padx=2)
+
+        tk.Label(f_liaison_form, text="Type :").grid(row=0, column=4, padx=2)
+        self._var_type = tk.StringVar(value="AEM")
+        ttk.Combobox(f_liaison_form, textvariable=self._var_type,
+                     values=self.TYPES, width=6,
+                     state="readonly").grid(row=0, column=5, padx=2)
+
+        tk.Button(f_liaison_form, text="+ Ajouter", command=self._ajouter_liaison,
+                  pady=1).grid(row=0, column=6, padx=(8, 2))
+        tk.Button(f_liaison_form, text="− Retirer la sélection",
+                  command=self._retirer_liaison, pady=1).grid(row=0, column=7, padx=2)
+
+        # ── Boutons bas ──────────────────────────────────────────────────────
+        f_bas = tk.Frame(self, pady=10)
+        f_bas.pack(fill=tk.X)
+        tk.Button(f_bas, text="💾 Enregistrer", command=self._sauvegarder,
+                  padx=10, pady=3).pack(side=tk.LEFT, padx=10)
+        tk.Button(f_bas, text="📥 Enregistrer et importer maintenant",
+                  bg="#00838F", fg="white", font=("", 9, "bold"),
+                  command=self._importer, padx=10, pady=3).pack(side=tk.LEFT)
+        tk.Button(f_bas, text="Fermer", command=self.destroy,
+                  padx=10, pady=3).pack(side=tk.RIGHT, padx=10)
+
+    def _tester_connexion(self):
+        url = self._var_url.get().strip()
+        if not url:
+            messagebox.showwarning("Lien manquant", "Collez d'abord votre lien ICS.",
+                                   parent=self)
+            return
+        self._lbl_statut_connexion.config(text="Connexion en cours...", fg="#555")
+        self.update_idletasks()
+        try:
+            texte = telecharger_ics(url)
+            nb = len(parser_ics(texte))
+        except Exception as e:
+            self._lbl_statut_connexion.config(
+                text=f"❌ Échec de connexion : {e}", fg="#C62828")
+            return
+        self._lbl_statut_connexion.config(
+            text=f"✅ Connecté — {nb} évènement(s) trouvé(s) dans l'agenda.",
+            fg="#2E7D32")
+
+    def _ajouter_tag(self):
+        tag = self._var_nouveau_tag.get().strip()
+        if not tag:
+            return
+        if tag not in self._liste_tags.get(0, tk.END):
+            self._liste_tags.insert(tk.END, tag)
+        self._var_nouveau_tag.set("")
+
+    def _retirer_tag(self):
+        sel = self._liste_tags.curselection()
+        if sel:
+            self._liste_tags.delete(sel[0])
+
+    def _ajouter_liaison(self):
+        mot_cle = self._var_mot_cle.get().strip()
+        employeur = self._var_employeur.get().strip()
+        type_ = self._var_type.get().strip() or "AEM"
+        if not mot_cle or not employeur:
+            messagebox.showwarning("Champs manquants",
+                                   "Mot-clé et Employeur sont obligatoires.",
+                                   parent=self)
+            return
+        self._tree.insert("", tk.END, values=(mot_cle, employeur, type_))
+        self._var_mot_cle.set("")
+        self._var_employeur.set("")
+
+    def _retirer_liaison(self):
+        sel = self._tree.selection()
+        if sel:
+            self._tree.delete(sel[0])
+
+    def _config_actuelle(self) -> dict:
+        return {
+            "url_ics": self._var_url.get().strip(),
+            "tags_travail": list(self._liste_tags.get(0, tk.END)),
+            "liaisons": [
+                {"mot_cle": v[0], "employeur": v[1], "type": v[2]}
+                for v in (self._tree.item(iid, "values") for iid in self._tree.get_children())
+            ],
+        }
+
+    def _sauvegarder(self):
+        sauvegarder_config_agenda(self._config_actuelle())
+        messagebox.showinfo("Enregistré", "Configuration agenda enregistrée.",
+                            parent=self)
+
+    def _importer(self):
+        cfg = self._config_actuelle()
+        sauvegarder_config_agenda(cfg)
+        if not cfg["url_ics"]:
+            messagebox.showwarning("Lien manquant",
+                                   "Renseignez d'abord le lien ICS de votre agenda.",
+                                   parent=self)
+            return
+        try:
+            rapport = importer_evenements(cfg)
+        except Exception as e:
+            messagebox.showerror("Erreur d'import",
+                                 f"Impossible de lire l'agenda :\n{e}", parent=self)
+            return
+
+        self.a_importe = bool(rapport["importes"])
+        lignes = [f"✅ {len(rapport['importes'])} contrat(s) prévisionnel(s) créé(s)."]
+        for titre, date_iso, employeur in rapport["importes"]:
+            lignes.append(f"   • {date_iso} — {employeur} ({titre})")
+        if rapport["deja_existants"]:
+            lignes.append(f"\nℹ {len(rapport['deja_existants'])} déjà présent(s), ignoré(s).")
+        if rapport["ignores_sans_lien"]:
+            lignes.append(f"\n⚠ {len(rapport['ignores_sans_lien'])} évènement(s) de travail "
+                          "sans mot-clé correspondant (ajoutez une liaison) :")
+            for titre, date_iso in rapport["ignores_sans_lien"]:
+                lignes.append(f"   • {date_iso} — {titre}")
+        messagebox.showinfo("Résultat de l'import", "\n".join(lignes), parent=self)
 
 
 # ---------------------------------------------------------------------------
