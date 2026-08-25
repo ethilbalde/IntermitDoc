@@ -6329,7 +6329,7 @@ class FenetrePrincipale(TkinterDnD.Tk if DND_DISPONIBLE else tk.Tk):
 
         # ---- Tab 1 : Analyse ----
         self.tab_analyse = tk.Frame(self.notebook)
-        self.notebook.add(self.tab_analyse, text="  Analyse  ")
+        self.notebook.add(self.tab_analyse, text="  Analyser & Classer  ")
         self._construire_onglet_analyse(self.tab_analyse)
 
         # ---- Tab 2 : Employeurs ----
@@ -6338,7 +6338,7 @@ class FenetrePrincipale(TkinterDnD.Tk if DND_DISPONIBLE else tk.Tk):
 
         # ---- Tab 3 : Calcul ----
         self.tab_calcul = OngletCalcul(self.notebook)
-        self.notebook.add(self.tab_calcul, text="  Calcul AEM  ")
+        self.notebook.add(self.tab_calcul, text="  Calculatrice AEM/ARE  ")
 
         # ---- Tab 4 : Suivi Intermittent ----
         self.tab_suivi = OngletSuivi(self.notebook, cfg_getter=lambda: self.cfg)
@@ -6346,7 +6346,7 @@ class FenetrePrincipale(TkinterDnD.Tk if DND_DISPONIBLE else tk.Tk):
 
         # ---- Tab 5 : Récapitulatif ----
         self.tab_recap = OngletRecap(self.notebook, cfg_getter=lambda: self.cfg)
-        self.notebook.add(self.tab_recap, text="  Récapitulatif  ")
+        self.notebook.add(self.tab_recap, text="  Bilan par période  ")
 
         # ---- Tab 6 : Scan & Déplacement ----
         self.tab_scan = OngletScan(self.notebook, cfg_getter=lambda: self.cfg)
@@ -6354,7 +6354,7 @@ class FenetrePrincipale(TkinterDnD.Tk if DND_DISPONIBLE else tk.Tk):
 
         # ---- Tab 7 : Historique ----
         self.tab_historique = OngletHistorique(self.notebook, cfg_getter=lambda: self.cfg)
-        self.notebook.add(self.tab_historique, text="  Historique  ")
+        self.notebook.add(self.tab_historique, text="  Historique & Contrats futurs  ")
 
         # Auto-refresh Suivi / Récap when their tab is selected
         self.notebook.bind("<<NotebookTabChanged>>", self._on_changement_onglet)
