@@ -922,14 +922,23 @@ class DialogueParametres(tk.Toplevel):
         tk.Label(frame_ann, text="format JJ/MM  (ex: 15/09)", font=("", 8),
                  fg="#666").pack(side=tk.LEFT, padx=6)
 
-        tk.Label(self, text="→ Clés API IA : menu Outils → Boost IA",
-                 font=("", 8, "italic"), fg="#888").grid(
-            row=6, column=0, columnspan=2, pady=(0, 4))
-
         frame_btn = tk.Frame(self)
         frame_btn.grid(row=7, column=0, columnspan=2, pady=8)
+        tk.Button(frame_btn, text="🤖 Boost IA...", bg="#5E35B1", fg="white",
+                  command=self._ouvrir_boost_ia).pack(side=tk.LEFT, padx=4)
+        tk.Button(frame_btn, text="📅 Agenda...", bg="#00838F", fg="white",
+                  command=self._ouvrir_dialogue_agenda).pack(side=tk.LEFT, padx=4)
         tk.Button(frame_btn, text="Enregistrer", command=self._sauvegarder).pack(side=tk.LEFT, padx=4)
         tk.Button(frame_btn, text="Annuler",     command=self.destroy).pack(side=tk.LEFT, padx=4)
+
+    def _ouvrir_dialogue_agenda(self):
+        dlg = _DialogueAgenda(self)
+        self.wait_window(dlg)
+
+    def _ouvrir_boost_ia(self):
+        dlg = DialogueBoostIA(self, self.cfg)
+        self.wait_window(dlg)
+        self.cfg = charger_config()
 
     def _choisir_dossier(self):
         d = filedialog.askdirectory(parent=self)
