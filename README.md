@@ -239,18 +239,11 @@ python main.py
 python -m pytest tests/ -v
 ```
 
-## Compilation de l'exe et de l'installeur
+## Installeur Windows
 
-```bash
-python -m PyInstaller intermitdoc.spec --noconfirm
-# résultat : dist\IntermitDoc\
-
-# une seule fois : récupère l'installeur officiel Tesseract (non versionné, ~48 Mo)
-powershell -File installer_assets\telecharger_tesseract.ps1
-
-"C:\Users\<vous>\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer.iss
-# résultat : installer_output\IntermitDoc-Setup-X.Y.Z.exe (inclut Tesseract en option)
-```
+Pas besoin de Python ni de compiler quoi que ce soit : téléchargez directement le
+dernier installeur depuis la page des [releases GitHub](https://github.com/ethilbalde/IntermitDoc/releases/latest)
+(`IntermitDoc-Setup-X.Y.Z.exe`), lancez-le et suivez l'assistant.
 
 ## Architecture
 
