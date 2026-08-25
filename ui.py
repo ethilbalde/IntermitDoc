@@ -922,6 +922,15 @@ class DialogueParametres(tk.Toplevel):
         tk.Label(frame_ann, text="format JJ/MM  (ex: 15/09)", font=("", 8),
                  fg="#666").pack(side=tk.LEFT, padx=6)
 
+        tk.Label(self, text="Abattement net (onglet Revenus) :").grid(
+            row=6, column=0, sticky="w", **pad)
+        self.var_taux_net = tk.StringVar(
+            value=str(self.cfg.get("taux_abattement_net", 10.0)))
+        frame_taux = tk.Frame(self)
+        frame_taux.grid(row=6, column=1, sticky="w", **pad)
+        tk.Entry(frame_taux, textvariable=self.var_taux_net, width=6).pack(side=tk.LEFT)
+        tk.Label(frame_taux, text="%", font=("", 8), fg="#666").pack(side=tk.LEFT, padx=4)
+
         frame_btn = tk.Frame(self)
         frame_btn.grid(row=7, column=0, columnspan=2, pady=8)
         tk.Button(frame_btn, text="🤖 Boost IA...", bg="#5E35B1", fg="white",
@@ -979,6 +988,10 @@ class DialogueParametres(tk.Toplevel):
         self.cfg["langue_ocr"]       = self.var_lang.get().strip()
         self.cfg["annexe"]           = self.var_annexe.get().strip()
         self.cfg["date_anniversaire"] = self.var_date_ann.get().strip()
+        try:
+            self.cfg["taux_abattement_net"] = float(self.var_taux_net.get().strip().replace(",", "."))
+        except ValueError:
+            pass
         sauvegarder_config(self.cfg)
         try:
             self.master._maj_titre()
@@ -5470,6 +5483,405 @@ class OngletRecap(tk.Frame):
 
 
 # ---------------------------------------------------------------------------
+# Onglet Revenus — vue pluriannuelle
+# ---------------------------------------------------------------------------
+class OngletRevenus(tk.Frame):
+    """
+    Vue transversale toutes années confondues : évolution du salaire brut,
+    répartition par employeur/type, estimation nette, historique du seuil
+    de rentabilité (14 400€), export CSV.
+    """
+
+    COL = [
+        ("annee",      "Année",         60),
+        ("brut_reel",  "Brut réel",     90),
+        ("brut_total", "Brut + prévi.", 90),
+        ("net_estime", "Net estimé",    90),
+        ("contrats",   "Contrats",      70),
+        ("seuil",      "Seuil 14 400€", 160),
+    ]
+
+    def __init__(self, parent, cfg_getter):
+        super().__init__(parent)
+        self._cfg_getter = cfg_getter
+        self._docs: list = []
+        self._stats_par_annee: dict = {}
+        self._iid_annees: dict = {}
+        self._construire()
+
+    # ── Construction UI ─────────────────────────────────────────────────────
+
+    def _construire(self):
+        bar = tk.Frame(self, pady=6, padx=10)
+        bar.pack(fill=tk.X)
+        tk.Label(bar, text="💰 Revenus — vue pluriannuelle", font=("", 11, "bold"),
+                 fg="#1A237E").pack(side=tk.LEFT)
+        tk.Button(bar, text="↻ Actualiser", command=self.actualiser,
+                  bg="#1976D2", fg="white", padx=10, pady=3).pack(side=tk.RIGHT, padx=4)
+        tk.Button(bar, text="📤 Exporter CSV", command=self._exporter_csv,
+                  bg="#2E7D32", fg="white", padx=10, pady=3).pack(side=tk.RIGHT, padx=4)
+
+        bar2 = tk.Frame(self, padx=10)
+        bar2.pack(fill=tk.X)
+        tk.Label(bar2, text="Taux d'abattement estimé (brut → net) :").pack(side=tk.LEFT)
+        self.var_taux = tk.StringVar(value=str(self._cfg_getter().get("taux_abattement_net", 10.0)))
+        tk.Entry(bar2, textvariable=self.var_taux, width=6).pack(side=tk.LEFT, padx=(4, 4))
+        tk.Label(bar2, text="%").pack(side=tk.LEFT)
+        tk.Button(bar2, text="Appliquer", command=self._appliquer_taux,
+                  padx=6, pady=1).pack(side=tk.LEFT, padx=8)
+
+        # ── Graphique pluriannuel ────────────────────────────────────────────
+        self._canvas_graph = tk.Canvas(self, height=170, bg="white",
+                                       highlightthickness=0)
+        self._canvas_graph.pack(fill=tk.X, padx=10, pady=(8, 4))
+        self._canvas_graph.bind("<Configure>", lambda e: self._dessiner_graphique())
+
+        # ── Corps : tableau années à gauche, détail à droite ─────────────────
+        paned = tk.PanedWindow(self, orient=tk.HORIZONTAL, sashwidth=6,
+                               sashrelief=tk.RAISED)
+        paned.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
+
+        frame_tableau = tk.Frame(paned)
+        paned.add(frame_tableau, minsize=380)
+
+        cols = [c[0] for c in self.COL]
+        self.tree = ttk.Treeview(frame_tableau, columns=cols, show="headings",
+                                 selectmode="browse", height=10)
+        for cid, label, w in self.COL:
+            self.tree.heading(cid, text=label)
+            self.tree.column(cid, width=w, minwidth=40, anchor="w")
+        self.tree.tag_configure("depasse", background="#FFEBEE")
+        self.tree.pack(fill=tk.BOTH, expand=True)
+        self.tree.bind("<<TreeviewSelect>>", lambda e: self._on_select_annee())
+        self._tri = _installer_tri(self.tree, cols)
+
+        frame_detail = tk.Frame(paned, padx=8)
+        paned.add(frame_detail, minsize=320)
+
+        self._lbl_titre_detail = tk.Label(frame_detail, text="Détail — toutes années",
+                                          font=("", 10, "bold"), fg="#1A237E")
+        self._lbl_titre_detail.pack(anchor="w", pady=(4, 6))
+
+        self._lbl_mensuel = tk.Label(frame_detail, text="", font=("", 9), fg="#333")
+        self._lbl_mensuel.pack(anchor="w")
+        self._lbl_net = tk.Label(frame_detail, text="", font=("", 9), fg="#333")
+        self._lbl_net.pack(anchor="w")
+        self._lbl_seuil = tk.Label(frame_detail, text="", font=("", 9, "bold"))
+        self._lbl_seuil.pack(anchor="w", pady=(0, 8))
+
+        tk.Label(frame_detail, text="Répartition par employeur",
+                 font=("", 9, "bold"), fg="#555").pack(anchor="w")
+        self._canvas_emp = tk.Canvas(frame_detail, height=140, bg="white",
+                                     highlightthickness=0)
+        self._canvas_emp.pack(fill=tk.X, pady=(2, 10))
+
+        tk.Label(frame_detail, text="Répartition par type de document",
+                 font=("", 9, "bold"), fg="#555").pack(anchor="w")
+        self._canvas_type = tk.Canvas(frame_detail, height=60, bg="white",
+                                      highlightthickness=0)
+        self._canvas_type.pack(fill=tk.X, pady=(2, 4))
+
+    # ── Données ──────────────────────────────────────────────────────────────
+
+    def actualiser(self):
+        from previsionnel import charger_previsionnels
+        cfg = self._cfg_getter()
+        dossier = cfg.get("dossier_base", "")
+        docs = _scanner_tous_docs(dossier) if dossier else []
+
+        prevs = charger_previsionnels()
+        prevs_docs = []
+        for p in prevs:
+            d = dict(p)
+            d.setdefault("type", "AEM")
+            a, m = d.get("annee", ""), d.get("mois", "")
+            dd = d.get("date_debut", "")
+            df = d.get("date_fin", dd)
+            if a and m and dd and len(dd) == 2:
+                d["date_debut"] = f"{a}-{m}-{dd}"
+                d["date_fin"] = f"{a}-{m}-{df}" if df and len(df) == 2 else d["date_debut"]
+            d["_previsionnel"] = True
+            prevs_docs.append(d)
+
+        self._docs = docs + prevs_docs
+        self._calculer_par_annee()
+        self._dessiner_graphique()
+        self._maj_tableau_annees()
+        self._on_select_annee()
+
+    @staticmethod
+    def _num(v) -> float:
+        try:
+            return float(str(v).replace(",", ".").replace(" ", ""))
+        except (ValueError, TypeError):
+            return 0.0
+
+    def _calculer_par_annee(self):
+        from collections import defaultdict
+        par_annee = defaultdict(lambda: {
+            "brut_reel": 0.0, "brut_total": 0.0, "contrats": 0,
+            "employeurs": defaultdict(float), "types": defaultdict(float),
+            "mois_actifs": set(),
+        })
+        for d in self._docs:
+            annee = d.get("annee", "")
+            if not annee:
+                continue
+            s = self._num(d.get("salaire"))
+            entry = par_annee[annee]
+            if not d.get("_previsionnel"):
+                entry["brut_reel"] += s
+            entry["brut_total"] += s
+            entry["contrats"] += 1
+            emp = d.get("employeur", "")
+            if emp:
+                entry["employeurs"][emp] += s
+            entry["types"][d.get("type", "?")] += s
+            mois = d.get("mois", "")
+            if mois:
+                entry["mois_actifs"].add(mois)
+        self._stats_par_annee = dict(par_annee)
+
+    # ── Graphique pluriannuel ────────────────────────────────────────────────
+
+    def _dessiner_graphique(self):
+        c = self._canvas_graph
+        c.delete("all")
+        W = c.winfo_width() or 800
+        H = 170
+
+        annees = sorted(self._stats_par_annee.keys())
+        if not annees:
+            c.create_text(W // 2, H // 2, text="Aucune donnée — cliquez Actualiser",
+                          fill="#999", font=("", 9))
+            return
+
+        marge_g, marge_d, marge_h, marge_b = 50, 20, 16, 34
+        largeur_utile = max(1, W - marge_g - marge_d)
+        hauteur_utile = H - marge_h - marge_b
+        n = len(annees)
+        larg_barre = min(60, largeur_utile / n * 0.5)
+        pas = largeur_utile / n
+
+        max_val = max((self._stats_par_annee[a]["brut_total"] for a in annees), default=0)
+        max_val = max(max_val, SEUIL_SALAIRE_RENTABLE, 1)
+
+        # Ligne seuil 14 400€
+        y_seuil = marge_h + hauteur_utile * (1 - SEUIL_SALAIRE_RENTABLE / max_val)
+        c.create_line(marge_g, y_seuil, W - marge_d, y_seuil,
+                      fill="#D32F2F", dash=(4, 2))
+        c.create_text(W - marge_d, y_seuil - 8, text="14 400€", anchor="e",
+                      font=("", 7), fill="#D32F2F")
+
+        val_precedente = None
+        for i, a in enumerate(annees):
+            s = self._stats_par_annee[a]
+            x_centre = marge_g + pas * i + pas / 2
+            total = s["brut_total"]
+            reel = s["brut_reel"]
+
+            h_total = hauteur_utile * min(1.0, total / max_val)
+            h_reel = hauteur_utile * min(1.0, reel / max_val)
+            y_base = marge_h + hauteur_utile
+
+            couleur_total = "#CE93D8" if total <= SEUIL_SALAIRE_RENTABLE else "#F8BBD0"
+            couleur_reel = "#4A148C" if total <= SEUIL_SALAIRE_RENTABLE else "#B71C1C"
+
+            c.create_rectangle(x_centre - larg_barre/2, y_base - h_total,
+                               x_centre + larg_barre/2, y_base, fill=couleur_total, outline="")
+            c.create_rectangle(x_centre - larg_barre/2, y_base - h_reel,
+                               x_centre + larg_barre/2, y_base, fill=couleur_reel, outline="")
+
+            c.create_text(x_centre, y_base - h_total - 10,
+                          text=f"{total:.0f}€", font=("", 8, "bold"), fill="#333")
+
+            if val_precedente and val_precedente > 0:
+                evo = (total - val_precedente) / val_precedente * 100
+                signe = "+" if evo >= 0 else ""
+                c.create_text(x_centre, y_base - h_total - 22,
+                              text=f"{signe}{evo:.0f}%",
+                              font=("", 7), fill="#2E7D32" if evo >= 0 else "#C62828")
+            val_precedente = total
+
+            c.create_text(x_centre, y_base + 14, text=a, font=("", 9, "bold"), fill="#333")
+
+    # ── Tableau années ────────────────────────────────────────────────────────
+
+    def _maj_tableau_annees(self):
+        self.tree.delete(*self.tree.get_children())
+        self._iid_annees = {}
+        taux = self._taux_actuel()
+        for annee in sorted(self._stats_par_annee.keys(), reverse=True):
+            s = self._stats_par_annee[annee]
+            total = s["brut_total"]
+            net = total * (1 - taux / 100)
+            depasse = total > SEUIL_SALAIRE_RENTABLE
+            seuil_txt = (f"⚠ +{total - SEUIL_SALAIRE_RENTABLE:.0f}€"
+                        if depasse else "✓ OK")
+            iid = self.tree.insert("", tk.END, values=(
+                annee, f"{s['brut_reel']:.0f} €", f"{total:.0f} €",
+                f"{net:.0f} €", s["contrats"], seuil_txt,
+            ), tags=(("depasse",) if depasse else ()))
+            self._iid_annees[iid] = annee
+
+    def _on_select_annee(self):
+        sel = self.tree.selection()
+        annee = self._iid_annees.get(sel[0]) if sel else None
+        self._maj_detail(annee)
+
+    # ── Détail (année sélectionnée ou global) ────────────────────────────────
+
+    def _taux_actuel(self) -> float:
+        try:
+            return float(self.var_taux.get().replace(",", "."))
+        except ValueError:
+            return 10.0
+
+    def _appliquer_taux(self):
+        taux = self._taux_actuel()
+        cfg = self._cfg_getter()
+        cfg["taux_abattement_net"] = taux
+        sauvegarder_config(cfg)
+        self._maj_tableau_annees()
+        self._on_select_annee()
+
+    def _maj_detail(self, annee):
+        if annee and annee in self._stats_par_annee:
+            s = self._stats_par_annee[annee]
+            self._lbl_titre_detail.config(text=f"Détail — {annee}")
+        elif self._stats_par_annee:
+            s = {
+                "brut_reel": sum(v["brut_reel"] for v in self._stats_par_annee.values()),
+                "brut_total": sum(v["brut_total"] for v in self._stats_par_annee.values()),
+                "contrats": sum(v["contrats"] for v in self._stats_par_annee.values()),
+                "employeurs": defaultdict_sum(
+                    [v["employeurs"] for v in self._stats_par_annee.values()]),
+                "types": defaultdict_sum(
+                    [v["types"] for v in self._stats_par_annee.values()]),
+                "mois_actifs": set().union(
+                    *[v["mois_actifs"] for v in self._stats_par_annee.values()]) or set(),
+            }
+            self._lbl_titre_detail.config(text="Détail — toutes années")
+        else:
+            self._lbl_titre_detail.config(text="Détail — aucune donnée")
+            self._lbl_mensuel.config(text="")
+            self._lbl_net.config(text="")
+            self._lbl_seuil.config(text="")
+            self._canvas_emp.delete("all")
+            self._canvas_type.delete("all")
+            return
+
+        nb_mois = max(1, len(s["mois_actifs"]))
+        moyenne_mensuelle = s["brut_total"] / nb_mois
+        self._lbl_mensuel.config(
+            text=f"Revenu mensuel moyen : {moyenne_mensuelle:.0f} € "
+                 f"(sur {nb_mois} mois actif(s))")
+
+        taux = self._taux_actuel()
+        net = s["brut_total"] * (1 - taux / 100)
+        self._lbl_net.config(
+            text=f"Estimation nette ({taux:.0f}% d'abattement) : {net:.0f} €")
+
+        depasse = s["brut_total"] > SEUIL_SALAIRE_RENTABLE
+        if depasse:
+            self._lbl_seuil.config(
+                text=f"⚠ Dépasse le seuil de 14 400€ (+{s['brut_total']-SEUIL_SALAIRE_RENTABLE:.0f} €) "
+                     "— plus rentable de déclarer en intermittent",
+                fg="#C62828")
+        else:
+            self._lbl_seuil.config(
+                text=f"✓ Sous le seuil de 14 400€ ({SEUIL_SALAIRE_RENTABLE - s['brut_total']:.0f} € de marge)",
+                fg="#2E7D32")
+
+        self._dessiner_repartition_employeur(s["employeurs"])
+        self._dessiner_repartition_type(s["types"])
+
+    def _dessiner_repartition_employeur(self, employeurs: dict):
+        c = self._canvas_emp
+        c.delete("all")
+        c.update_idletasks()
+        W = c.winfo_width() or 280
+        if not employeurs:
+            c.create_text(W // 2, 20, text="Aucun employeur", fill="#999", font=("", 8))
+            return
+        total = sum(employeurs.values()) or 1
+        classement = sorted(employeurs.items(), key=lambda kv: kv[1], reverse=True)[:6]
+        y = 6
+        for emp, montant in classement:
+            pct = montant / total
+            c.create_text(4, y, text=f"{emp[:22]}", anchor="nw", font=("", 8), fill="#333")
+            c.create_text(W - 4, y, text=f"{montant:.0f} € ({pct*100:.0f}%)",
+                          anchor="ne", font=("", 8, "bold"), fill="#4A148C")
+            y += 12
+            largeur = max(2, int((W - 8) * pct))
+            c.create_rectangle(4, y, 4 + largeur, y + 8, fill="#7B1FA2", outline="")
+            y += 16
+
+    def _dessiner_repartition_type(self, types: dict):
+        c = self._canvas_type
+        c.delete("all")
+        c.update_idletasks()
+        W = c.winfo_width() or 280
+        if not types:
+            c.create_text(W // 2, 20, text="Aucun document", fill="#999", font=("", 8))
+            return
+        total = sum(types.values()) or 1
+        couleurs = {"AEM": "#1565C0", "BP": "#2E7D32", "CS": "#F9A825",
+                   "CT": "#F9A825", "STC": "#AD1457"}
+        y = 4
+        for t, montant in sorted(types.items(), key=lambda kv: kv[1], reverse=True):
+            pct = montant / total
+            c.create_text(4, y, text=f"{t} : {montant:.0f} € ({pct*100:.0f}%)",
+                          anchor="nw", font=("", 8), fill=couleurs.get(t, "#555"))
+            largeur = max(2, int((W - 8) * pct))
+            c.create_rectangle(4, y + 12, 4 + largeur, y + 20,
+                               fill=couleurs.get(t, "#999"), outline="")
+            y += 26
+
+    # ── Export CSV ───────────────────────────────────────────────────────────
+
+    def _exporter_csv(self):
+        if not self._stats_par_annee:
+            messagebox.showinfo("Rien à exporter", "Cliquez d'abord sur Actualiser.",
+                                parent=self)
+            return
+        chemin = filedialog.asksaveasfilename(
+            parent=self, defaultextension=".csv",
+            filetypes=[("Fichier CSV", "*.csv")],
+            initialfile="revenus_intermitdoc.csv")
+        if not chemin:
+            return
+        import csv
+        taux = self._taux_actuel()
+        try:
+            with open(chemin, "w", newline="", encoding="utf-8-sig") as f:
+                w = csv.writer(f, delimiter=";")
+                w.writerow(["Année", "Brut réel (€)", "Brut réel + prévisionnel (€)",
+                           f"Net estimé -{taux:.0f}% (€)", "Contrats", "Dépasse 14 400€"])
+                for annee in sorted(self._stats_par_annee.keys()):
+                    s = self._stats_par_annee[annee]
+                    total = s["brut_total"]
+                    net = total * (1 - taux / 100)
+                    w.writerow([annee, f"{s['brut_reel']:.2f}", f"{total:.2f}",
+                               f"{net:.2f}", s["contrats"],
+                               "Oui" if total > SEUIL_SALAIRE_RENTABLE else "Non"])
+            messagebox.showinfo("Export réussi", f"Fichier enregistré :\n{chemin}",
+                                parent=self)
+        except OSError as e:
+            messagebox.showerror("Erreur d'export", str(e), parent=self)
+
+
+def defaultdict_sum(dicts: list) -> dict:
+    """Fusionne une liste de dicts numériques en sommant les valeurs communes."""
+    from collections import defaultdict
+    resultat = defaultdict(float)
+    for d in dicts:
+        for k, v in d.items():
+            resultat[k] += v
+    return dict(resultat)
+
+
+# ---------------------------------------------------------------------------
 # Dialogue rapport d'erreur copiable
 # ---------------------------------------------------------------------------
 class DialogueRapport(tk.Toplevel):
@@ -6371,6 +6783,10 @@ class FenetrePrincipale(TkinterDnD.Tk if DND_DISPONIBLE else tk.Tk):
         self.tab_recap = OngletRecap(self.notebook, cfg_getter=lambda: self.cfg)
         self.notebook.add(self.tab_recap, text="  Bilan par période  ")
 
+        # ---- Tab 5b : Revenus ----
+        self.tab_revenus = OngletRevenus(self.notebook, cfg_getter=lambda: self.cfg)
+        self.notebook.add(self.tab_revenus, text="  💰 Revenus  ")
+
         # ---- Tab 6 : Scan & Déplacement ----
         self.tab_scan = OngletScan(self.notebook, cfg_getter=lambda: self.cfg)
         self.notebook.add(self.tab_scan, text="  Scan & Déplacement  ")
@@ -6395,6 +6811,8 @@ class FenetrePrincipale(TkinterDnD.Tk if DND_DISPONIBLE else tk.Tk):
             self.tab_suivi._actualiser()
         elif onglet is self.tab_recap:
             self.tab_recap.actualiser()
+        elif onglet is self.tab_revenus:
+            self.tab_revenus.actualiser()
 
     def _construire_onglet_analyse(self, parent):
         # Zone de drop

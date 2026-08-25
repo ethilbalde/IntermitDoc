@@ -75,6 +75,7 @@ DEFAULT_CONFIG = {
     "modele_claude": "claude-sonnet-4-6",
     "date_anniversaire": "",   # JJ/MM de la date anniversaire intermittent
     "annexe": "",              # "8", "10", ou "8+10"
+    "taux_abattement_net": 10.0,  # % estimatif brut -> net (onglet Revenus)
     "ia_providers": {
         "claude":  {"enabled": True,  "api_key": ""},
         "openai":  {"enabled": False, "api_key": ""},
