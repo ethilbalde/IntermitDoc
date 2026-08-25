@@ -3807,7 +3807,7 @@ class OngletHistorique(tk.Frame):
 
         cols = [c[0] for c in self.COL]
         self.tree = ttk.Treeview(frame_liste, columns=cols, show="headings",
-                                 selectmode="browse")
+                                 selectmode="extended")
         for cid, label, w in self.COL:
             self.tree.heading(cid, text=label)
             self.tree.column(cid, width=w, minwidth=40, anchor="w")
@@ -3845,7 +3845,7 @@ class OngletHistorique(tk.Frame):
             label="💾  Enregistrer les modifications",
             command=self._sauvegarder)
         self._menu_ctx.add_command(
-            label="🗑  Supprimer le prévisionnel",
+            label="🗑  Supprimer le(s) prévisionnel(s) sélectionné(s)",
             command=self._supprimer_previsionnel)
 
         # ── Panneau droit : formulaire seul ──────────────────────────────────
@@ -4156,6 +4156,26 @@ class OngletHistorique(tk.Frame):
         sel = self.tree.selection()
         if not sel:
             return
+
+        if len(sel) > 1:
+            # Sélection multiple : pas d'édition détail, juste la suppression groupée.
+            for var in self._vars_form.values():
+                var.set("")
+            self._var_note.set("")
+            self._chemin_ouvert = ""
+            self._btn_save.config(state=tk.DISABLED)
+            contrats_sel = [self._contrats[self._iid_index[i]] for i in sel
+                            if self._iid_index.get(i) is not None]
+            nb_prev = sum(1 for c in contrats_sel if c.get("previsionnel"))
+            self._btn_delete.config(state=tk.NORMAL if nb_prev else tk.DISABLED)
+            self._lbl_status.config(
+                text=f"{len(sel)} éléments sélectionnés ({nb_prev} prévisionnel(s) "
+                     "supprimable(s))")
+            self._menu_ctx.entryconfig(0, state=tk.DISABLED)
+            self._menu_ctx.entryconfig(1, state=tk.DISABLED)
+            self._menu_ctx.entryconfig(6, state=tk.NORMAL if nb_prev else tk.DISABLED)
+            return
+
         iid = sel[0]
         idx = self._iid_index.get(iid)
         if idx is None:
@@ -4204,7 +4224,7 @@ class OngletHistorique(tk.Frame):
 
     def _on_clic_droit(self, event):
         iid = self.tree.identify_row(event.y)
-        if iid:
+        if iid and iid not in self.tree.selection():
             self.tree.selection_set(iid)
             self._on_select()
         try:
@@ -4346,18 +4366,18 @@ class OngletHistorique(tk.Frame):
         sel = self.tree.selection()
         if not sel:
             return
-        iid = sel[0]
-        idx = self._iid_index.get(iid)
-        if idx is None:
+        contrats = [self._contrats[self._iid_index[i]] for i in sel
+                   if self._iid_index.get(i) is not None]
+        a_supprimer = [c for c in contrats if c.get("previsionnel")]
+        if not a_supprimer:
             return
-        contrat = self._contrats[idx]
-        if not contrat.get("previsionnel"):
+        n = len(a_supprimer)
+        question = ("Supprimer ce contrat prévisionnel ?" if n == 1 else
+                    f"Supprimer ces {n} contrats prévisionnels ?")
+        if not messagebox.askyesno("Supprimer", question):
             return
-        if not messagebox.askyesno("Supprimer",
-                                   "Supprimer ce contrat prévisionnel ?"):
-            return
-        prev_id = contrat.get("id", "")
-        _supprimer_previsionnel_hist(prev_id)
+        for contrat in a_supprimer:
+            _supprimer_previsionnel_hist(contrat.get("id", ""))
         self._actualiser_liste()
 
     # ── Import agenda Google (ICS) ───────────────────────────────────────────
@@ -4964,6 +4984,7 @@ class OngletRecap(tk.Frame):
         super().__init__(parent)
         self._cfg_getter = cfg_getter
         self._docs: list = []
+        self._iid_docs: dict = {}
         self._construire()
 
     def _construire(self):
@@ -4976,6 +4997,9 @@ class OngletRecap(tk.Frame):
 
         tk.Button(bar, text="↻ Actualiser", command=self.actualiser,
                   bg="#1976D2", fg="white", padx=10, pady=3).pack(side=tk.RIGHT, padx=4)
+        tk.Button(bar, text="🗑 Supprimer la sélection",
+                  command=self._supprimer_selection,
+                  bg="#B71C1C", fg="white", padx=10, pady=3).pack(side=tk.RIGHT, padx=4)
 
         # ── Sélecteurs de filtre ─────────────────────────────────────────────
         bar2 = tk.Frame(self, padx=10)
@@ -5357,6 +5381,7 @@ class OngletRecap(tk.Frame):
     def _maj_tableau(self, docs, periodes):
         for item in self.tree.get_children():
             self.tree.delete(item)
+        self._iid_docs = {}
 
         total_h = total_s = 0.0
         periode_courante = None
@@ -5390,7 +5415,7 @@ class OngletRecap(tk.Frame):
             dd, df = d.get("date_debut", ""), d.get("date_fin", "")
             jour_debut = dd[8:10] if len(dd) == 10 else dd
             jour_fin   = df[8:10] if len(df) == 10 else df
-            self.tree.insert("", tk.END, values=(
+            iid = self.tree.insert("", tk.END, values=(
                 jour_debut,
                 jour_fin,
                 OngletHistorique.MOIS_NOMS.get(d.get("mois", ""), d.get("mois", "")),
@@ -5400,6 +5425,7 @@ class OngletRecap(tk.Frame):
                 f"{h:.1f} h" if h else "—",
                 f"{s:.2f} €" if s else "—",
             ), tags=(tag,))
+            self._iid_docs[iid] = d
 
         if periode_courante:
             self.tree.insert("", tk.END, values=(
@@ -5409,6 +5435,27 @@ class OngletRecap(tk.Frame):
 
         nb = len(docs)
         self._lbl_pied.config(text=f"{nb} contrat(s) affiché(s)")
+
+    def _supprimer_selection(self):
+        from previsionnel import supprimer_previsionnel
+        sel = self.tree.selection()
+        docs_sel = [self._iid_docs[i] for i in sel if i in self._iid_docs]
+        a_supprimer = [d for d in docs_sel if d.get("_previsionnel") and d.get("id")]
+        if not a_supprimer:
+            messagebox.showinfo(
+                "Rien à supprimer",
+                "Sélectionnez un ou plusieurs contrats prévisionnels (⏳) — "
+                "les documents classifiés ne peuvent pas être supprimés ici.",
+                parent=self)
+            return
+        n = len(a_supprimer)
+        question = ("Supprimer ce contrat prévisionnel ?" if n == 1 else
+                    f"Supprimer ces {n} contrats prévisionnels ?")
+        if not messagebox.askyesno("Supprimer", question, parent=self):
+            return
+        for d in a_supprimer:
+            supprimer_previsionnel(d["id"])
+        self.actualiser()
 
     @staticmethod
     def _num(v) -> float:
