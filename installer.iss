@@ -6,7 +6,7 @@
 ;      powershell -File installer_assets\telecharger_tesseract.ps1
 
 #define MyAppName "IntermitDoc"
-#define MyAppVersion "1.3.0"
+#define MyAppVersion "1.4.0"
 #define MyAppPublisher "IntermitDoc"
 #define MyAppURL "https://github.com/ethilbalde/IntermitDoc"
 #define MyAppExeName "IntermitDoc.exe"
