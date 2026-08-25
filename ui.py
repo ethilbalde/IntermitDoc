@@ -6118,6 +6118,7 @@ class DialogueBienvenue(tk.Toplevel):
         self.title("Bienvenue dans IntermitDoc")
         self.resizable(False, False)
         self.annexe_choisie = ""
+        self.dossier_choisi = ""
         self._var = tk.StringVar(value="")
         self._construire()
         self.grab_set()
@@ -6152,10 +6153,24 @@ class DialogueBienvenue(tk.Toplevel):
         for val, info in self.ANNEXES.items():
             self._carte(frame_cartes, val, info)
 
+        # ── Dossier de base ──────────────────────────────────────────────────
+        tk.Label(self, text="Dossier où seront classés vos documents",
+                 font=("", 12, "bold"), pady=(14, 6)).pack()
+        frame_dossier = tk.Frame(self, padx=20)
+        frame_dossier.pack(fill=tk.X)
+        self._var_dossier = tk.StringVar()
+        tk.Entry(frame_dossier, textvariable=self._var_dossier, width=45).pack(
+            side=tk.LEFT, fill=tk.X, expand=True)
+        tk.Button(frame_dossier, text="Parcourir...",
+                  command=self._choisir_dossier).pack(side=tk.LEFT, padx=(6, 0))
+        tk.Label(self, text="Optionnel ici — configurable plus tard dans Paramètres.",
+                 font=("", 8), fg="#777").pack(pady=(2, 0))
+
         # ── Note ──────────────────────────────────────────────────────────
         tk.Label(self,
-                 text="Cette information est stockée dans votre configuration\n"
-                      "et peut être modifiée à tout moment dans Outils → Paramètres.",
+                 text="Ces informations sont stockées dans votre configuration\n"
+                      "et peuvent être modifiées à tout moment dans Outils → Paramètres\n"
+                      "(qui donne aussi accès à Boost IA et à l'import agenda Google).",
                  font=("", 8), fg="#777", justify=tk.CENTER).pack(pady=(8, 4))
 
         # ── Bouton valider ────────────────────────────────────────────────
@@ -6167,6 +6182,11 @@ class DialogueBienvenue(tk.Toplevel):
                                 padx=20, pady=8,
                                 state=tk.DISABLED)
         self.btn_ok.pack(pady=(4, 16))
+
+    def _choisir_dossier(self):
+        d = filedialog.askdirectory(parent=self)
+        if d:
+            self._var_dossier.set(d)
 
     def _carte(self, parent, val: str, info: dict):
         """Crée une carte cliquable pour un choix d'annexe."""
@@ -6221,6 +6241,7 @@ class DialogueBienvenue(tk.Toplevel):
 
     def _valider(self):
         if self.annexe_choisie:
+            self.dossier_choisi = self._var_dossier.get().strip()
             self.destroy()
 
 
@@ -6253,6 +6274,8 @@ class FenetrePrincipale(TkinterDnD.Tk if DND_DISPONIBLE else tk.Tk):
             self.wait_window(dlg)
             if dlg.annexe_choisie:
                 self.cfg["annexe"] = dlg.annexe_choisie
+                if dlg.dossier_choisi and not self.cfg.get("dossier_base"):
+                    self.cfg["dossier_base"] = dlg.dossier_choisi
                 sauvegarder_config(self.cfg)
         self._maj_titre()
 
