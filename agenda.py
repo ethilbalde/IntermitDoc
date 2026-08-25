@@ -140,9 +140,11 @@ def _previsionnel_existe(prevs: list, annee, mois, employeur, date_debut) -> boo
     return False
 
 
-def importer_evenements(cfg: dict = None) -> dict:
-    """Télécharge l'ICS, filtre les évènements de travail futurs, crée les
-    prévisionnels correspondant aux liaisons configurées.
+def importer_evenements(cfg: dict = None, dry_run: bool = False) -> dict:
+    """Télécharge l'ICS, filtre les évènements de travail à partir du 1er du
+    mois en cours, compare aux prévisionnels déjà enregistrés, et crée les
+    manquants selon les liaisons configurées (sauf si dry_run=True : dans ce
+    cas rien n'est écrit, le rapport sert juste d'aperçu/comparaison).
     Retourne un rapport {"importes": [...], "deja_existants": [...], "ignores_sans_lien": [...]}.
     """
     cfg = cfg or charger_config_agenda()
@@ -156,13 +158,13 @@ def importer_evenements(cfg: dict = None) -> dict:
 
     texte = telecharger_ics(url)
     evenements = parser_ics(texte)
-    aujourdhui = _date.today()
+    debut_mois_courant = _date.today().replace(day=1)
     prevs = charger_previsionnels()
 
     for ev in evenements:
         debut = ev["dtstart"]
         date_debut = debut.date() if isinstance(debut, _datetime) else debut
-        if date_debut < aujourdhui:
+        if date_debut < debut_mois_courant:
             continue
 
         titre = ev.get("summary", "")
@@ -202,7 +204,8 @@ def importer_evenements(cfg: dict = None) -> dict:
             "salaire":    salaire,
             "note":       f"Importé depuis l'agenda : {titre}",
         }
-        prevs = ajouter_previsionnel(contrat)
+        if not dry_run:
+            prevs = ajouter_previsionnel(contrat)
         rapport["importes"].append((titre, date_debut_iso, employeur))
 
     return rapport

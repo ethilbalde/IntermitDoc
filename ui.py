@@ -4679,14 +4679,12 @@ class _DialogueAgenda(tk.Toplevel):
         # ── Connexion à Google Agenda ────────────────────────────────────────
         f_url = tk.LabelFrame(self, text="🔗 Connexion à Google Agenda", padx=10, pady=8)
         f_url.pack(fill=tk.X, padx=10, pady=(10, 4))
-        tk.Label(f_url, text="1. Sur calendar.google.com → ⚙ Paramètres → cliquez sur "
-                 "votre agenda dans la colonne de gauche.\n"
-                 "2. Section \"Intégrer l'agenda\" → copiez l'\"Adresse secrète au "
+        tk.Label(f_url, text="1. Sur calendar.google.com → ⚙ Paramètres → "
+                 "\"Paramètres de mes agendas\".\n"
+                 "2. Cliquez sur l'agenda à partager (dans la colonne de gauche).\n"
+                 "3. Section \"Intégrer l'agenda\" → copiez l'\"Adresse secrète au "
                  "format iCal\" (se termine par .ics).\n"
-                 "   (Ne pas confondre avec Paramètres → Ajouter un agenda → "
-                 "À partir de l'URL : ce menu sert à s'abonner à un agenda d'un "
-                 "AUTRE compte, pas à récupérer le lien du vôtre.)\n"
-                 "3. Collez-la ci-dessous puis cliquez sur Tester la connexion.",
+                 "4. Collez-la ci-dessous puis cliquez sur Tester la connexion.",
                  wraplength=440, justify="left", fg="#555").pack(anchor="w")
         self._var_url = tk.StringVar(value=self._cfg.get("url_ics", ""))
         tk.Entry(f_url, textvariable=self._var_url, width=60).pack(
@@ -4817,8 +4815,24 @@ class _DialogueAgenda(tk.Toplevel):
                 text=f"❌ Échec de connexion : {e}", fg="#C62828")
             return
         self._lbl_statut_connexion.config(
-            text=f"✅ Connecté — {nb} évènement(s) trouvé(s) dans l'agenda.",
+            text=f"✅ Connecté — {nb} évènement(s) trouvé(s) dans l'agenda. "
+                 "Comparaison avec vos prévisionnels...",
             fg="#2E7D32")
+        self.update_idletasks()
+
+        cfg = self._config_actuelle()
+        cfg["url_ics"] = url
+        try:
+            rapport = importer_evenements(cfg, dry_run=True)
+        except Exception as e:
+            self._lbl_statut_connexion.config(
+                text=f"⚠ Connecté, mais échec de la comparaison : {e}", fg="#C62828")
+            return
+        self._lbl_statut_connexion.config(
+            text=f"✅ Connecté — {nb} évènement(s) dans l'agenda, "
+                 f"{len(rapport['importes'])} nouveau(x) à importer depuis le mois en cours.",
+            fg="#2E7D32")
+        self._afficher_rapport(rapport, "Comparaison agenda ↔ prévisionnels")
 
     def _ajouter_tag(self):
         tag = self._var_nouveau_tag.get().strip()
@@ -4887,17 +4901,22 @@ class _DialogueAgenda(tk.Toplevel):
             return
 
         self.a_importe = bool(rapport["importes"])
-        lignes = [f"✅ {len(rapport['importes'])} contrat(s) prévisionnel(s) créé(s)."]
+        self._afficher_rapport(rapport, "Résultat de l'import", cree=True)
+
+    def _afficher_rapport(self, rapport: dict, titre_fenetre: str, cree: bool = False):
+        verbe = "créé(s)" if cree else "à créer"
+        lignes = [f"✅ {len(rapport['importes'])} contrat(s) prévisionnel(s) {verbe}."]
         for titre, date_iso, employeur in rapport["importes"]:
             lignes.append(f"   • {date_iso} — {employeur} ({titre})")
         if rapport["deja_existants"]:
-            lignes.append(f"\nℹ {len(rapport['deja_existants'])} déjà présent(s), ignoré(s).")
+            lignes.append(f"\nℹ {len(rapport['deja_existants'])} déjà présent(s) dans vos "
+                          "prévisionnels, ignoré(s).")
         if rapport["ignores_sans_lien"]:
             lignes.append(f"\n⚠ {len(rapport['ignores_sans_lien'])} évènement(s) de travail "
                           "sans mot-clé correspondant (ajoutez une liaison) :")
             for titre, date_iso in rapport["ignores_sans_lien"]:
                 lignes.append(f"   • {date_iso} — {titre}")
-        messagebox.showinfo("Résultat de l'import", "\n".join(lignes), parent=self)
+        messagebox.showinfo(titre_fenetre, "\n".join(lignes), parent=self)
 
 
 # ---------------------------------------------------------------------------
