@@ -182,14 +182,19 @@ def importer_evenements(cfg: dict = None, dry_run: bool = False) -> dict:
             heures = str(round((fin - debut).total_seconds() / 3600, 2))
         salaire = liaison.get("salaire", "").strip() if liaison.get("salaire") else ""
 
-        date_fin_iso = (fin.date() if isinstance(fin, _datetime) else fin or date_debut).isoformat()
+        date_fin_date = fin.date() if isinstance(fin, _datetime) else fin or date_debut
 
+        # Convention du schéma prévisionnel : date_debut/date_fin ne contiennent
+        # que le jour (annee/mois sont stockés séparément), cf. reconstruction
+        # dans OngletHistorique._actualiser_liste (f"{annee}-{mois}-{jour}").
         employeur = liaison.get("employeur", "").strip()
         annee = str(date_debut.year)
         mois = f"{date_debut.month:02d}"
-        date_debut_iso = date_debut.isoformat()
+        jour_debut = f"{date_debut.day:02d}"
+        jour_fin = f"{date_fin_date.day:02d}"
+        date_debut_iso = date_debut.isoformat()  # pour l'affichage du rapport
 
-        if _previsionnel_existe(prevs, annee, mois, employeur, date_debut_iso):
+        if _previsionnel_existe(prevs, annee, mois, employeur, jour_debut):
             rapport["deja_existants"].append((titre, date_debut_iso))
             continue
 
@@ -198,8 +203,8 @@ def importer_evenements(cfg: dict = None, dry_run: bool = False) -> dict:
             "annee":      annee,
             "mois":       mois,
             "employeur":  employeur,
-            "date_debut": date_debut_iso,
-            "date_fin":   date_fin_iso,
+            "date_debut": jour_debut,
+            "date_fin":   jour_fin,
             "heures":     heures,
             "salaire":    salaire,
             "note":       f"Importé depuis l'agenda : {titre}",
