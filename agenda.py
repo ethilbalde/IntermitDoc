@@ -175,10 +175,10 @@ def importer_evenements(cfg: dict = None) -> dict:
             continue
 
         fin = ev.get("dtend")
-        heures = ""
-        if isinstance(debut, _datetime) and isinstance(fin, _datetime):
-            heures = round((fin - debut).total_seconds() / 3600, 2)
-            heures = str(heures)
+        heures = liaison.get("heures", "").strip() if liaison.get("heures") else ""
+        if not heures and isinstance(debut, _datetime) and isinstance(fin, _datetime):
+            heures = str(round((fin - debut).total_seconds() / 3600, 2))
+        salaire = liaison.get("salaire", "").strip() if liaison.get("salaire") else ""
 
         date_fin_iso = (fin.date() if isinstance(fin, _datetime) else fin or date_debut).isoformat()
 
@@ -199,7 +199,7 @@ def importer_evenements(cfg: dict = None) -> dict:
             "date_debut": date_debut_iso,
             "date_fin":   date_fin_iso,
             "heures":     heures,
-            "salaire":    "",
+            "salaire":    salaire,
             "note":       f"Importé depuis l'agenda : {titre}",
         }
         prevs = ajouter_previsionnel(contrat)

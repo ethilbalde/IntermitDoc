@@ -4683,11 +4683,18 @@ class _DialogueAgenda(tk.Toplevel):
                  "votre agenda dans la colonne de gauche.\n"
                  "2. Section \"Intégrer l'agenda\" → copiez l'\"Adresse secrète au "
                  "format iCal\" (se termine par .ics).\n"
+                 "   (Ne pas confondre avec Paramètres → Ajouter un agenda → "
+                 "À partir de l'URL : ce menu sert à s'abonner à un agenda d'un "
+                 "AUTRE compte, pas à récupérer le lien du vôtre.)\n"
                  "3. Collez-la ci-dessous puis cliquez sur Tester la connexion.",
                  wraplength=440, justify="left", fg="#555").pack(anchor="w")
         self._var_url = tk.StringVar(value=self._cfg.get("url_ics", ""))
         tk.Entry(f_url, textvariable=self._var_url, width=60).pack(
-            fill=tk.X, pady=(6, 4))
+            fill=tk.X, pady=(6, 2))
+        tk.Label(f_url, text="Exemple : https://calendar.google.com/calendar/ical/"
+                 "florent.olivier.revol%40gmail.com/private-3f8a1c9d2e7b4f56/basic.ics",
+                 font=("", 8), fg="#888", wraplength=440,
+                 justify="left").pack(anchor="w", pady=(0, 2))
         self._lbl_statut_connexion = tk.Label(f_url, text="", fg="#555")
         self._lbl_statut_connexion.pack(anchor="w")
         tk.Button(f_url, text="🔌 Tester la connexion",
@@ -4725,19 +4732,22 @@ class _DialogueAgenda(tk.Toplevel):
             padx=10, pady=8)
         f_liaisons.pack(fill=tk.BOTH, padx=10, pady=4)
 
-        cols = ("mot_cle", "employeur", "type")
+        cols = ("mot_cle", "employeur", "type", "heures", "salaire")
         self._tree = ttk.Treeview(f_liaisons, columns=cols, show="headings",
                                    height=5, selectmode="browse")
-        for cid, label, w in [("mot_cle", "Mot-clé", 120),
-                               ("employeur", "Employeur", 180),
-                               ("type", "Type", 60)]:
+        for cid, label, w in [("mot_cle", "Mot-clé", 110),
+                               ("employeur", "Employeur", 160),
+                               ("type", "Type", 50),
+                               ("heures", "Heures", 60),
+                               ("salaire", "Salaire brut", 80)]:
             self._tree.heading(cid, text=label)
             self._tree.column(cid, width=w, anchor="w")
         self._tree.pack(fill=tk.X)
         for liaison in self._cfg.get("liaisons", []):
             self._tree.insert("", tk.END, values=(
                 liaison.get("mot_cle", ""), liaison.get("employeur", ""),
-                liaison.get("type", "AEM")))
+                liaison.get("type", "AEM"), liaison.get("heures", ""),
+                liaison.get("salaire", "")))
 
         f_liaison_form = tk.Frame(f_liaisons)
         f_liaison_form.pack(fill=tk.X, pady=(6, 0))
@@ -4760,10 +4770,25 @@ class _DialogueAgenda(tk.Toplevel):
                      values=self.TYPES, width=6,
                      state="readonly").grid(row=0, column=5, padx=2)
 
+        tk.Label(f_liaison_form, text="Heures :").grid(row=1, column=0, padx=2, pady=(4, 0))
+        self._var_heures = tk.StringVar()
+        tk.Entry(f_liaison_form, textvariable=self._var_heures,
+                 width=14).grid(row=1, column=1, padx=2, pady=(4, 0))
+
+        tk.Label(f_liaison_form, text="Salaire brut :").grid(row=1, column=2, padx=2, pady=(4, 0))
+        self._var_salaire = tk.StringVar()
+        tk.Entry(f_liaison_form, textvariable=self._var_salaire,
+                 width=16).grid(row=1, column=3, padx=2, pady=(4, 0))
+        tk.Label(f_liaison_form, text="(optionnel — si le contrat est toujours "
+                 "le même, l'import n'aura plus qu'à les copier)",
+                 font=("", 8), fg="#888").grid(row=1, column=4, columnspan=2,
+                                                sticky="w", pady=(4, 0))
+
         tk.Button(f_liaison_form, text="+ Ajouter", command=self._ajouter_liaison,
-                  pady=1).grid(row=0, column=6, padx=(8, 2))
+                  pady=1).grid(row=2, column=0, columnspan=2, pady=(6, 0))
         tk.Button(f_liaison_form, text="− Retirer la sélection",
-                  command=self._retirer_liaison, pady=1).grid(row=0, column=7, padx=2)
+                  command=self._retirer_liaison, pady=1).grid(
+            row=2, column=2, columnspan=2, pady=(6, 0))
 
         # ── Boutons bas ──────────────────────────────────────────────────────
         f_bas = tk.Frame(self, pady=10)
@@ -4812,14 +4837,18 @@ class _DialogueAgenda(tk.Toplevel):
         mot_cle = self._var_mot_cle.get().strip()
         employeur = self._var_employeur.get().strip()
         type_ = self._var_type.get().strip() or "AEM"
+        heures = self._var_heures.get().strip()
+        salaire = self._var_salaire.get().strip()
         if not mot_cle or not employeur:
             messagebox.showwarning("Champs manquants",
                                    "Mot-clé et Employeur sont obligatoires.",
                                    parent=self)
             return
-        self._tree.insert("", tk.END, values=(mot_cle, employeur, type_))
+        self._tree.insert("", tk.END, values=(mot_cle, employeur, type_, heures, salaire))
         self._var_mot_cle.set("")
         self._var_employeur.set("")
+        self._var_heures.set("")
+        self._var_salaire.set("")
 
     def _retirer_liaison(self):
         sel = self._tree.selection()
@@ -4831,7 +4860,8 @@ class _DialogueAgenda(tk.Toplevel):
             "url_ics": self._var_url.get().strip(),
             "tags_travail": list(self._liste_tags.get(0, tk.END)),
             "liaisons": [
-                {"mot_cle": v[0], "employeur": v[1], "type": v[2]}
+                {"mot_cle": v[0], "employeur": v[1], "type": v[2],
+                 "heures": v[3], "salaire": v[4]}
                 for v in (self._tree.item(iid, "values") for iid in self._tree.get_children())
             ],
         }
