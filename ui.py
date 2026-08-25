@@ -1402,6 +1402,11 @@ def _scanner_tous_docs(dossier_base: str) -> list:
     return sorted(vus.values(), key=lambda x: x["date_debut"])
 
 
+# Au-delà de ce montant brut (réel + prévisionnel) sur la période, l'utilisateur
+# considère que déclarer en intermittent n'est plus rentable pour lui.
+SEUIL_SALAIRE_RENTABLE = 14400
+
+
 def _calculer_stats(docs: list, date_debut_str: str, date_fin_str: str,
                     annexe: str = "8") -> dict:
     """
@@ -1477,7 +1482,7 @@ def _calculer_stats(docs: list, date_debut_str: str, date_fin_str: str,
         "manquantes":      max(0.0, 507 - total_heures),
         "pct_507":         min(1.0, total_heures / 507),
         "pct_720":         min(1.0, total_heures / 720),
-        "pct_salaire":     min(1.0, total_salaire / 14400),
+        "pct_salaire":     min(1.0, total_salaire / SEUIL_SALAIRE_RENTABLE),
         "employeurs":      sorted(employeurs),
         "nb_employeurs":   len(employeurs),
         "sjr":             sjr,
@@ -2128,6 +2133,11 @@ class OngletSuivi(tk.Frame):
                                         font=("", 9), fg="#555", wraplength=280)
         self.lbl_employeurs.pack(pady=1)
 
+        self.lbl_alerte_salaire = tk.Label(self._carte_507, text="",
+                                            font=("", 9, "bold"), fg="#C62828",
+                                            wraplength=280, justify="left")
+        self.lbl_alerte_salaire.pack(pady=(2, 0))
+
         # Bouton + Prévisionnel
         tk.Button(self._carte_507, text="+ Ajouter un contrat prévisionnel",
                   command=self._ajouter_previsionnel,
@@ -2465,7 +2475,7 @@ class OngletSuivi(tk.Frame):
         _barre_duo(
             y0=50, y1=72,
             pct_reel=s.get("pct_salaire", 0),
-            pct_prev=min(1.0, s_prev / 14400),
+            pct_prev=min(1.0, s_prev / SEUIL_SALAIRE_RENTABLE),
             couleur_reel="#4A148C",
             couleur_prev="#CE93D8",
             pct_seuil=0,
@@ -2515,6 +2525,16 @@ class OngletSuivi(tk.Frame):
             text=(f"{len(emps)} employeur(s) : {', '.join(emps)}" if emps
                   else "Aucun employeur trouvé sur la période")
         )
+
+        # Alerte seuil de rentabilité (14 400 € brut réel + prévisionnel)
+        if s_prev > SEUIL_SALAIRE_RENTABLE:
+            depassement = s_prev - SEUIL_SALAIRE_RENTABLE
+            self.lbl_alerte_salaire.config(
+                text=f"⚠ Vous dépassez 14 400 € brut sur la période "
+                     f"(+{depassement:.0f} €, réel + prévisionnel) : au-delà de ce "
+                     "montant, il est conseillé de ne plus déclarer en intermittent.")
+        else:
+            self.lbl_alerte_salaire.config(text="")
 
     def _afficher_chiffres(self):
         s  = self._stats
@@ -5326,6 +5346,13 @@ class OngletRecap(tk.Frame):
                 tk.Label(card, text=", ".join(emps[:3]) + ("…" if len(emps) > 3 else ""),
                          font=("", 7), fg="#555", wraplength=180, justify=tk.LEFT
                          ).grid(row=6, column=0, columnspan=2, sticky="w", pady=(2, 0))
+
+            if total_s > SEUIL_SALAIRE_RENTABLE:
+                tk.Label(card, text=f"⚠ +{total_s - SEUIL_SALAIRE_RENTABLE:.0f} € au-delà "
+                         "de 14 400 € : plus rentable de déclarer en intermittent",
+                         font=("", 7, "bold"), fg="#C62828", wraplength=180,
+                         justify=tk.LEFT).grid(row=7, column=0, columnspan=2,
+                                                sticky="w", pady=(3, 0))
 
     def _maj_tableau(self, docs, periodes):
         for item in self.tree.get_children():
