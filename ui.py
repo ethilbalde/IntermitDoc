@@ -4972,6 +4972,95 @@ class _DialogueAgenda(tk.Toplevel):
         messagebox.showinfo(titre_fenetre, "\n".join(lignes), parent=self)
 
 
+def _calculer_periodes_anniversaire(docs: list, cfg: dict) -> list:
+    """
+    Retourne la liste de périodes [(label, date_debut, date_fin), ...]
+    basées sur la date anniversaire configurée (JJ/MM) — les "périodes ARE".
+    Si non configurée, retourne des périodes par année calendaire.
+    Partagée par Bilan par période et Revenus pour rester cohérente.
+    """
+    from datetime import date, timedelta
+    anniv_str = cfg.get("date_anniversaire", "").strip()
+
+    if not anniv_str or "/" not in anniv_str:
+        annees = sorted({d.get("annee", "") for d in docs if d.get("annee")}, reverse=True)
+        periodes = []
+        for a in annees:
+            debut = date(int(a), 1, 1)
+            fin   = date(int(a), 12, 31)
+            periodes.append((a, debut, fin))
+        return periodes
+
+    try:
+        jour, mois = int(anniv_str.split("/")[0]), int(anniv_str.split("/")[1])
+    except (ValueError, IndexError):
+        return []
+
+    dates_doc = []
+    for d in docs:
+        for cle in ("date_debut", "date_fin"):
+            v = d.get(cle, "")
+            if v and len(v) >= 10:
+                try:
+                    dates_doc.append(date.fromisoformat(v[:10]))
+                except ValueError:
+                    pass
+    if not dates_doc:
+        return []
+
+    date_min = min(dates_doc)
+    today    = date.today()
+
+    anniv_annee = date_min.year
+    try:
+        anniv_test = date(anniv_annee, mois, jour)
+    except ValueError:
+        anniv_test = date(anniv_annee, mois, 28)
+    if anniv_test > date_min:
+        anniv_annee -= 1
+
+    periodes = []
+    while True:
+        try:
+            anniv_debut = date(anniv_annee, mois, jour)
+            anniv_fin   = date(anniv_annee + 1, mois, jour)
+        except ValueError:
+            anniv_debut = date(anniv_annee, mois, 28)
+            anniv_fin   = date(anniv_annee + 1, mois, 28)
+
+        debut_periode = anniv_debut + timedelta(days=1)
+        fin_periode   = anniv_fin
+
+        if debut_periode > today:
+            break
+
+        label = f"{debut_periode.strftime('%d/%m/%Y')} → {fin_periode.strftime('%d/%m/%Y')}"
+        if fin_periode >= today:
+            label += "  (en cours)"
+        periodes.append((label, debut_periode, fin_periode))
+        anniv_annee += 1
+        if debut_periode > today:
+            break
+
+    return list(reversed(periodes))
+
+
+def _periode_de_doc_globale(doc: dict, periodes: list):
+    """Retourne le label de la période à laquelle appartient un document."""
+    from datetime import date
+    v = doc.get("date_debut", "") or doc.get("date_fin", "")
+    if not v or len(v) < 10:
+        return None
+    try:
+        d = date.fromisoformat(v[:10])
+    except ValueError:
+        return None
+    for label, debut, fin in periodes:
+        if debut <= d <= fin:
+            return label
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Onglet Récapitulatif annuel
 # ---------------------------------------------------------------------------
@@ -5155,96 +5244,10 @@ class OngletRecap(tk.Frame):
     # ── Logique périodes anniversaire ────────────────────────────────────────
 
     def _periodes_anniversaire(self) -> list:
-        """
-        Retourne la liste de périodes [(label, date_debut, date_fin), ...]
-        basées sur la date anniversaire configurée (JJ/MM).
-        Si non configurée, retourne des périodes par année calendaire.
-        """
-        from datetime import date, timedelta
-        cfg = self._cfg_getter()
-        anniv_str = cfg.get("date_anniversaire", "").strip()
-
-        if not anniv_str or "/" not in anniv_str:
-            # Fallback : années calendaires
-            annees = sorted({d.get("annee", "") for d in self._docs if d.get("annee")}, reverse=True)
-            periodes = []
-            for a in annees:
-                debut = date(int(a), 1, 1)
-                fin   = date(int(a), 12, 31)
-                periodes.append((a, debut, fin))
-            return periodes
-
-        try:
-            jour, mois = int(anniv_str.split("/")[0]), int(anniv_str.split("/")[1])
-        except (ValueError, IndexError):
-            return []
-
-        # Trouver toutes les dates de document pour déterminer la plage
-        dates_doc = []
-        for d in self._docs:
-            for cle in ("date_debut", "date_fin"):
-                v = d.get(cle, "")
-                if v and len(v) >= 10:
-                    try:
-                        dates_doc.append(date.fromisoformat(v[:10]))
-                    except ValueError:
-                        pass
-        if not dates_doc:
-            return []
-
-        date_min = min(dates_doc)
-        today    = date.today()
-
-        # Trouver la première date anniversaire avant ou égale à date_min
-        anniv_annee = date_min.year
-        try:
-            anniv_test = date(anniv_annee, mois, jour)
-        except ValueError:
-            anniv_test = date(anniv_annee, mois, 28)
-        if anniv_test > date_min:
-            anniv_annee -= 1
-
-        # Générer les périodes jusqu'à aujourd'hui
-        # La période commence le LENDEMAIN de la date anniversaire
-        periodes = []
-        while True:
-            try:
-                anniv_debut = date(anniv_annee, mois, jour)
-                anniv_fin   = date(anniv_annee + 1, mois, jour)
-            except ValueError:
-                anniv_debut = date(anniv_annee, mois, 28)
-                anniv_fin   = date(anniv_annee + 1, mois, 28)
-
-            debut_periode = anniv_debut + timedelta(days=1)
-            fin_periode   = anniv_fin   # la date anniversaire elle-même est le dernier jour
-
-            if debut_periode > today:
-                break
-
-            label = f"{debut_periode.strftime('%d/%m/%Y')} → {fin_periode.strftime('%d/%m/%Y')}"
-            if fin_periode >= today:
-                label += "  (en cours)"
-            periodes.append((label, debut_periode, fin_periode))
-            anniv_annee += 1
-            if debut_periode > today:
-                break
-
-        return list(reversed(periodes))
+        return _calculer_periodes_anniversaire(self._docs, self._cfg_getter())
 
     def _periode_de_doc(self, doc: dict, periodes: list):
-        """Retourne le label de la période à laquelle appartient un document."""
-        from datetime import date
-        v = doc.get("date_debut", "") or doc.get("date_fin", "")
-        if not v or len(v) < 10:
-            return None
-        try:
-            d = date.fromisoformat(v[:10])
-        except ValueError:
-            return None
-        for label, debut, fin in periodes:
-            if debut <= d <= fin:
-                return label
-        return None
+        return _periode_de_doc_globale(doc, periodes)
 
     def _maj_combo(self):
         periodes = self._periodes_anniversaire()
@@ -5487,13 +5490,14 @@ class OngletRecap(tk.Frame):
 # ---------------------------------------------------------------------------
 class OngletRevenus(tk.Frame):
     """
-    Vue transversale toutes années confondues : évolution du salaire brut,
-    répartition par employeur/type, estimation nette, historique du seuil
-    de rentabilité (14 400€), export CSV.
+    Vue transversale toutes périodes ARE confondues (mêmes périodes
+    anniversaire que Bilan par période / Suivi, pas l'année calendaire) :
+    évolution du salaire brut, répartition par employeur/type, estimation
+    nette, historique du seuil de rentabilité (14 400€), export CSV.
     """
 
     COL = [
-        ("annee",      "Année",         60),
+        ("periode",    "Période",       220),
         ("brut_reel",  "Brut réel",     90),
         ("brut_total", "Brut + prévi.", 90),
         ("net_estime", "Net estimé",    90),
@@ -5505,8 +5509,9 @@ class OngletRevenus(tk.Frame):
         super().__init__(parent)
         self._cfg_getter = cfg_getter
         self._docs: list = []
-        self._stats_par_annee: dict = {}
-        self._iid_annees: dict = {}
+        self._periodes: list = []
+        self._stats_par_periode: dict = {}
+        self._iid_periodes: dict = {}
         self._construire()
 
     # ── Construction UI ─────────────────────────────────────────────────────
@@ -5514,7 +5519,7 @@ class OngletRevenus(tk.Frame):
     def _construire(self):
         bar = tk.Frame(self, pady=6, padx=10)
         bar.pack(fill=tk.X)
-        tk.Label(bar, text="💰 Revenus — vue pluriannuelle", font=("", 11, "bold"),
+        tk.Label(bar, text="💰 Revenus — vue par période ARE", font=("", 11, "bold"),
                  fg="#1A237E").pack(side=tk.LEFT)
         tk.Button(bar, text="↻ Actualiser", command=self.actualiser,
                   bg="#1976D2", fg="white", padx=10, pady=3).pack(side=tk.RIGHT, padx=4)
@@ -5552,13 +5557,13 @@ class OngletRevenus(tk.Frame):
             self.tree.column(cid, width=w, minwidth=40, anchor="w")
         self.tree.tag_configure("depasse", background="#FFEBEE")
         self.tree.pack(fill=tk.BOTH, expand=True)
-        self.tree.bind("<<TreeviewSelect>>", lambda e: self._on_select_annee())
+        self.tree.bind("<<TreeviewSelect>>", lambda e: self._on_select_periode())
         self._tri = _installer_tri(self.tree, cols)
 
         frame_detail = tk.Frame(paned, padx=8)
         paned.add(frame_detail, minsize=320)
 
-        self._lbl_titre_detail = tk.Label(frame_detail, text="Détail — toutes années",
+        self._lbl_titre_detail = tk.Label(frame_detail, text="Détail — toutes périodes",
                                           font=("", 10, "bold"), fg="#1A237E")
         self._lbl_titre_detail.pack(anchor="w", pady=(4, 6))
 
@@ -5604,10 +5609,11 @@ class OngletRevenus(tk.Frame):
             prevs_docs.append(d)
 
         self._docs = docs + prevs_docs
-        self._calculer_par_annee()
+        self._periodes = _calculer_periodes_anniversaire(self._docs, cfg)
+        self._calculer_par_periode()
         self._dessiner_graphique()
-        self._maj_tableau_annees()
-        self._on_select_annee()
+        self._maj_tableau_periodes()
+        self._on_select_periode()
 
     @staticmethod
     def _num(v) -> float:
@@ -5616,19 +5622,19 @@ class OngletRevenus(tk.Frame):
         except (ValueError, TypeError):
             return 0.0
 
-    def _calculer_par_annee(self):
+    def _calculer_par_periode(self):
         from collections import defaultdict
-        par_annee = defaultdict(lambda: {
+        par_periode = defaultdict(lambda: {
             "brut_reel": 0.0, "brut_total": 0.0, "contrats": 0,
             "employeurs": defaultdict(float), "types": defaultdict(float),
             "mois_actifs": set(),
         })
         for d in self._docs:
-            annee = d.get("annee", "")
-            if not annee:
+            periode = _periode_de_doc_globale(d, self._periodes)
+            if not periode:
                 continue
             s = self._num(d.get("salaire"))
-            entry = par_annee[annee]
+            entry = par_periode[periode]
             if not d.get("_previsionnel"):
                 entry["brut_reel"] += s
             entry["brut_total"] += s
@@ -5640,7 +5646,7 @@ class OngletRevenus(tk.Frame):
             mois = d.get("mois", "")
             if mois:
                 entry["mois_actifs"].add(mois)
-        self._stats_par_annee = dict(par_annee)
+        self._stats_par_periode = dict(par_periode)
 
     # ── Graphique pluriannuel ────────────────────────────────────────────────
 
@@ -5650,20 +5656,21 @@ class OngletRevenus(tk.Frame):
         W = c.winfo_width() or 800
         H = 170
 
-        annees = sorted(self._stats_par_annee.keys())
-        if not annees:
+        # Ordre chronologique (self._periodes est renvoyé du plus récent au plus ancien)
+        labels = [lbl for lbl, _, _ in reversed(self._periodes) if lbl in self._stats_par_periode]
+        if not labels:
             c.create_text(W // 2, H // 2, text="Aucune donnée — cliquez Actualiser",
                           fill="#999", font=("", 9))
             return
 
-        marge_g, marge_d, marge_h, marge_b = 50, 20, 16, 34
+        marge_g, marge_d, marge_h, marge_b = 50, 20, 16, 44
         largeur_utile = max(1, W - marge_g - marge_d)
         hauteur_utile = H - marge_h - marge_b
-        n = len(annees)
+        n = len(labels)
         larg_barre = min(60, largeur_utile / n * 0.5)
         pas = largeur_utile / n
 
-        max_val = max((self._stats_par_annee[a]["brut_total"] for a in annees), default=0)
+        max_val = max((self._stats_par_periode[lbl]["brut_total"] for lbl in labels), default=0)
         max_val = max(max_val, SEUIL_SALAIRE_RENTABLE, 1)
 
         # Ligne seuil 14 400€
@@ -5674,8 +5681,8 @@ class OngletRevenus(tk.Frame):
                       font=("", 7), fill="#D32F2F")
 
         val_precedente = None
-        for i, a in enumerate(annees):
-            s = self._stats_par_annee[a]
+        for i, lbl in enumerate(labels):
+            s = self._stats_par_periode[lbl]
             x_centre = marge_g + pas * i + pas / 2
             total = s["brut_total"]
             reel = s["brut_reel"]
@@ -5703,31 +5710,38 @@ class OngletRevenus(tk.Frame):
                               font=("", 7), fill="#2E7D32" if evo >= 0 else "#C62828")
             val_precedente = total
 
-            c.create_text(x_centre, y_base + 14, text=a, font=("", 9, "bold"), fill="#333")
+            annee_courte = lbl.split("→")[1].strip()[6:10] if "→" in lbl else lbl
+            c.create_text(x_centre, y_base + 14, text=annee_courte,
+                          font=("", 9, "bold"), fill="#333")
+            if "(en cours)" in lbl:
+                c.create_text(x_centre, y_base + 28, text="◀ en cours",
+                              font=("", 7, "italic"), fill="#E65100")
 
-    # ── Tableau années ────────────────────────────────────────────────────────
+    # ── Tableau périodes ─────────────────────────────────────────────────────
 
-    def _maj_tableau_annees(self):
+    def _maj_tableau_periodes(self):
         self.tree.delete(*self.tree.get_children())
-        self._iid_annees = {}
+        self._iid_periodes = {}
         taux = self._taux_actuel()
-        for annee in sorted(self._stats_par_annee.keys(), reverse=True):
-            s = self._stats_par_annee[annee]
+        for lbl, _debut, _fin in self._periodes:
+            if lbl not in self._stats_par_periode:
+                continue
+            s = self._stats_par_periode[lbl]
             total = s["brut_total"]
             net = total * (1 - taux / 100)
             depasse = total > SEUIL_SALAIRE_RENTABLE
             seuil_txt = (f"⚠ +{total - SEUIL_SALAIRE_RENTABLE:.0f}€"
                         if depasse else "✓ OK")
             iid = self.tree.insert("", tk.END, values=(
-                annee, f"{s['brut_reel']:.0f} €", f"{total:.0f} €",
+                lbl, f"{s['brut_reel']:.0f} €", f"{total:.0f} €",
                 f"{net:.0f} €", s["contrats"], seuil_txt,
             ), tags=(("depasse",) if depasse else ()))
-            self._iid_annees[iid] = annee
+            self._iid_periodes[iid] = lbl
 
-    def _on_select_annee(self):
+    def _on_select_periode(self):
         sel = self.tree.selection()
-        annee = self._iid_annees.get(sel[0]) if sel else None
-        self._maj_detail(annee)
+        periode = self._iid_periodes.get(sel[0]) if sel else None
+        self._maj_detail(periode)
 
     # ── Détail (année sélectionnée ou global) ────────────────────────────────
 
@@ -5742,26 +5756,26 @@ class OngletRevenus(tk.Frame):
         cfg = self._cfg_getter()
         cfg["taux_abattement_net"] = taux
         sauvegarder_config(cfg)
-        self._maj_tableau_annees()
-        self._on_select_annee()
+        self._maj_tableau_periodes()
+        self._on_select_periode()
 
-    def _maj_detail(self, annee):
-        if annee and annee in self._stats_par_annee:
-            s = self._stats_par_annee[annee]
-            self._lbl_titre_detail.config(text=f"Détail — {annee}")
-        elif self._stats_par_annee:
+    def _maj_detail(self, periode):
+        if periode and periode in self._stats_par_periode:
+            s = self._stats_par_periode[periode]
+            self._lbl_titre_detail.config(text=f"Détail — {periode}")
+        elif self._stats_par_periode:
             s = {
-                "brut_reel": sum(v["brut_reel"] for v in self._stats_par_annee.values()),
-                "brut_total": sum(v["brut_total"] for v in self._stats_par_annee.values()),
-                "contrats": sum(v["contrats"] for v in self._stats_par_annee.values()),
+                "brut_reel": sum(v["brut_reel"] for v in self._stats_par_periode.values()),
+                "brut_total": sum(v["brut_total"] for v in self._stats_par_periode.values()),
+                "contrats": sum(v["contrats"] for v in self._stats_par_periode.values()),
                 "employeurs": defaultdict_sum(
-                    [v["employeurs"] for v in self._stats_par_annee.values()]),
+                    [v["employeurs"] for v in self._stats_par_periode.values()]),
                 "types": defaultdict_sum(
-                    [v["types"] for v in self._stats_par_annee.values()]),
+                    [v["types"] for v in self._stats_par_periode.values()]),
                 "mois_actifs": set().union(
-                    *[v["mois_actifs"] for v in self._stats_par_annee.values()]) or set(),
+                    *[v["mois_actifs"] for v in self._stats_par_periode.values()]) or set(),
             }
-            self._lbl_titre_detail.config(text="Détail — toutes années")
+            self._lbl_titre_detail.config(text="Détail — toutes périodes")
         else:
             self._lbl_titre_detail.config(text="Détail — aucune donnée")
             self._lbl_mensuel.config(text="")
@@ -5841,7 +5855,7 @@ class OngletRevenus(tk.Frame):
     # ── Export CSV ───────────────────────────────────────────────────────────
 
     def _exporter_csv(self):
-        if not self._stats_par_annee:
+        if not self._stats_par_periode:
             messagebox.showinfo("Rien à exporter", "Cliquez d'abord sur Actualiser.",
                                 parent=self)
             return
@@ -5856,13 +5870,15 @@ class OngletRevenus(tk.Frame):
         try:
             with open(chemin, "w", newline="", encoding="utf-8-sig") as f:
                 w = csv.writer(f, delimiter=";")
-                w.writerow(["Année", "Brut réel (€)", "Brut réel + prévisionnel (€)",
+                w.writerow(["Période ARE", "Brut réel (€)", "Brut réel + prévisionnel (€)",
                            f"Net estimé -{taux:.0f}% (€)", "Contrats", "Dépasse 14 400€"])
-                for annee in sorted(self._stats_par_annee.keys()):
-                    s = self._stats_par_annee[annee]
+                for lbl, _debut, _fin in self._periodes:
+                    if lbl not in self._stats_par_periode:
+                        continue
+                    s = self._stats_par_periode[lbl]
                     total = s["brut_total"]
                     net = total * (1 - taux / 100)
-                    w.writerow([annee, f"{s['brut_reel']:.2f}", f"{total:.2f}",
+                    w.writerow([lbl, f"{s['brut_reel']:.2f}", f"{total:.2f}",
                                f"{net:.2f}", s["contrats"],
                                "Oui" if total > SEUIL_SALAIRE_RENTABLE else "Non"])
             messagebox.showinfo("Export réussi", f"Fichier enregistré :\n{chemin}",
