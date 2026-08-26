@@ -6783,23 +6783,19 @@ class FenetrePrincipale(TkinterDnD.Tk if DND_DISPONIBLE else tk.Tk):
         self.notebook.add(self.tab_analyse, text="  Analyser & Classer  ")
         self._construire_onglet_analyse(self.tab_analyse)
 
-        # ---- Tab 2 : Employeurs ----
-        self.tab_employeurs = OngletEmployeurs(self.notebook)
-        self.notebook.add(self.tab_employeurs, text="  Employeurs  ")
-
-        # ---- Tab 3 : Calcul ----
-        self.tab_calcul = OngletCalcul(self.notebook)
-        self.notebook.add(self.tab_calcul, text="  Calculatrice AEM/ARE  ")
-
-        # ---- Tab 4 : Suivi Intermittent ----
+        # ---- Tab 2 : Suivi Intermittent ----
         self.tab_suivi = OngletSuivi(self.notebook, cfg_getter=lambda: self.cfg)
         self.notebook.add(self.tab_suivi, text="  Suivi Intermittent  ")
 
-        # ---- Tab 5 : Récapitulatif ----
+        # ---- Tab 3 : Historique ----
+        self.tab_historique = OngletHistorique(self.notebook, cfg_getter=lambda: self.cfg)
+        self.notebook.add(self.tab_historique, text="  Historique & Contrats futurs  ")
+
+        # ---- Tab 4 : Récapitulatif ----
         self.tab_recap = OngletRecap(self.notebook, cfg_getter=lambda: self.cfg)
         self.notebook.add(self.tab_recap, text="  Bilan par période  ")
 
-        # ---- Tab 5b : Revenus ----
+        # ---- Tab 5 : Revenus ----
         self.tab_revenus = OngletRevenus(self.notebook, cfg_getter=lambda: self.cfg)
         self.notebook.add(self.tab_revenus, text="  💰 Revenus  ")
 
@@ -6807,9 +6803,13 @@ class FenetrePrincipale(TkinterDnD.Tk if DND_DISPONIBLE else tk.Tk):
         self.tab_scan = OngletScan(self.notebook, cfg_getter=lambda: self.cfg)
         self.notebook.add(self.tab_scan, text="  Scan & Déplacement  ")
 
-        # ---- Tab 7 : Historique ----
-        self.tab_historique = OngletHistorique(self.notebook, cfg_getter=lambda: self.cfg)
-        self.notebook.add(self.tab_historique, text="  Historique & Contrats futurs  ")
+        # ---- Tab 7 : Calcul ----
+        self.tab_calcul = OngletCalcul(self.notebook)
+        self.notebook.add(self.tab_calcul, text="  Calculatrice AEM/ARE  ")
+
+        # ---- Tab 8 : Employeurs ----
+        self.tab_employeurs = OngletEmployeurs(self.notebook)
+        self.notebook.add(self.tab_employeurs, text="  Employeurs  ")
 
         # Auto-refresh Suivi / Récap when their tab is selected
         self.notebook.bind("<<NotebookTabChanged>>", self._on_changement_onglet)
