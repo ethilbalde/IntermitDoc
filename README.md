@@ -27,7 +27,7 @@ Tout se passe sur votre ordinateur. Vos données ne sont jamais partagées.
 
 ---
 
-## Comment ça marche — les 8 onglets
+## Comment ça marche — les 7 onglets
 
 ### 1. Analyser & Classer
 Le cœur du programme. Déposez un ou plusieurs PDF (ou un dossier entier) : le programme
@@ -72,13 +72,7 @@ répartition par employeur et par type de document, revenu mensuel moyen, estima
 Scanne un dossier plein de PDF en vrac et propose un classement en masse, avec
 prévisualisation et confirmation avant tout déplacement.
 
-### 7. Calculatrice AEM/ARE
-Additionne les heures/salaire des AEM d'**un mois précis** (sélectionnez son dossier, ex.
-`2026\08 Août`, pas le dossier de base global) pour préparer une attestation. L'estimation
-détaillée de l'allocation ARE (formule A+B+C, franchises, Congés Spectacle) se fait depuis
-l'onglet Suivi Intermittent, bouton **Calculer ARE & Congés Spectacle**.
-
-### 8. Employeurs
+### 7. Employeurs
 Votre carnet d'employeurs. Les noms enregistrés ici sont reconnus **directement dans le
 texte des documents** — détection instantanée et fiable pour vos employeurs habituels.
 Fusion des doublons intégrée (« LR GROUP » / « Lr Group »).
@@ -268,7 +262,7 @@ dernier installeur depuis la page des [releases GitHub](https://github.com/ethil
 | Fichier | Rôle |
 |---|---|
 | `main.py` | point d'entrée |
-| `ui.py` | interface Tkinter (8 onglets) |
+| `ui.py` | interface Tkinter (7 onglets) |
 | `extractor.py` | extraction texte PDF (PyMuPDF) |
 | `analyzer.py` | analyse IA (Claude par défaut ; OpenAI / Gemini / Mistral en option) |
 | `classifier.py` | renommage + copie vers l'arborescence |

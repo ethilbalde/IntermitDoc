@@ -14,24 +14,27 @@ Application Python/Tkinter de classification de PDF pour intermittents du specta
 ## Architecture
 
 - `main.py` — point d'entrée
-- `ui.py` — interface Tkinter (8 onglets — voir section Onglets)
+- `ui.py` — interface Tkinter (7 onglets — voir section Onglets)
 - `classifier.py` — construction des noms de fichiers et copie vers la destination
 - `extractor.py` — extraction texte PDF via PyMuPDF (fitz)
 - `analyzer.py` — analyse IA via Claude API (claude-sonnet-4-6) + providers alternatifs (OpenAI, Gemini, Mistral)
 - `config.py` — configuration, logging rotatif, traites.json, employeurs.json
 - `previsionnel.py` — CRUD des contrats prévisionnels (previsionnels.json)
+- `agenda.py` — import de prévisionnels depuis un agenda Google (lien ICS)
 - `theme.py` — tokens couleur, 3 palettes, `apply_theme()` + `appliquer_theme()`
 - `tests/` — suite pytest (33 tests, 0 dépendance tkinter/API)
 
 ## Onglets UI (ui.py)
 
-1. **Analyse** — glisser-déposer PDF, analyse IA, classification
-2. **Employeurs** — `OngletEmployeurs` — CRUD liste employeurs
-3. **Calcul AEM** — `OngletCalcul` — calcul heures/salaire
-4. **Suivi Intermittent** — `OngletSuivi` — suivi ARE, heures glissantes
-5. **Récapitulatif** — `OngletRecap` — tableau tous documents + prévisionnels
+1. **Analyser & Classer** — glisser-déposer PDF, analyse IA, classification
+2. **Suivi Intermittent** — `OngletSuivi` — suivi ARE, heures glissantes, alerte seuil 14 400€
+3. **Historique & Contrats futurs** — `OngletHistorique` — navigation année/mois, liste AEM, fiche éditable, contrats futurs, import agenda Google
+4. **Bilan par période** — `OngletRecap` — tableau tous documents + prévisionnels par période ARE
+5. **Revenus** — `OngletRevenus` — vue pluriannuelle (par période ARE), répartition employeur/type, export CSV
 6. **Scan & Déplacement** — `OngletScan` — scan dossier et déplacement en masse
-7. **Historique** — `OngletHistorique` — navigation année/mois, liste AEM, fiche éditable, contrats futurs
+7. **Employeurs** — `OngletEmployeurs` — CRUD liste employeurs
+
+Note : l'onglet "Calcul AEM" (`OngletCalcul`) a été retiré (2026-08-27) — jugé non fonctionnel/confus par l'utilisateur (scannait un seul dossier mensuel, pas le dossier de base). L'estimation ARE (formule A+B+C) reste accessible depuis Suivi Intermittent → "Calculer ARE & Congés Spectacle".
 
 ## Système de thèmes (theme.py)
 
