@@ -73,8 +73,10 @@ Scanne un dossier plein de PDF en vrac et propose un classement en masse, avec
 prévisualisation et confirmation avant tout déplacement.
 
 ### 7. Calculatrice AEM/ARE
-Calculatrice heures / cachets / salaire pour préparer une attestation, et estimation de
-l'allocation ARE.
+Additionne les heures/salaire des AEM d'**un mois précis** (sélectionnez son dossier, ex.
+`2026\08 Août`, pas le dossier de base global) pour préparer une attestation. L'estimation
+détaillée de l'allocation ARE (formule A+B+C, franchises, Congés Spectacle) se fait depuis
+l'onglet Suivi Intermittent, bouton **Calculer ARE & Congés Spectacle**.
 
 ### 8. Employeurs
 Votre carnet d'employeurs. Les noms enregistrés ici sont reconnus **directement dans le

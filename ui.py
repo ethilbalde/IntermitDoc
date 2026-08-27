@@ -1825,6 +1825,10 @@ class OngletCalcul(tk.Frame):
         self._construire()
 
     def _construire(self):
+        tk.Label(self, text="Sélectionnez le dossier d'UN MOIS précis (ex: 2026\\08 Août), "
+                 "pas le dossier de base global — cet outil additionne les AEM d'un seul mois.",
+                 font=("", 8), fg="#666", pady=2).pack(fill=tk.X, padx=10)
+
         # Zone de drop dossier
         if DND_DISPONIBLE:
             self.lbl_drop = tk.Label(
@@ -1987,9 +1991,16 @@ class OngletCalcul(tk.Frame):
 
         # Label totaux
         nb = len(self._contrats)
-        self.lbl_totaux.config(
-            text=f"Total : {total_h:g} h  |  {total_eur:g} EUR  |  {nb} contrat(s)"
-        )
+        if nb == 0 and self._dossier:
+            self.lbl_totaux.config(
+                text="Aucun [AEM]*.pdf trouvé directement dans ce dossier ni dans son "
+                     "sous-dossier AEM\\ — sélectionnez le dossier d'UN MOIS précis "
+                     "(ex: 2026\\08 Août), pas le dossier de base global.",
+                fg="#C62828")
+        else:
+            self.lbl_totaux.config(
+                text=f"Total : {total_h:g} h  |  {total_eur:g} EUR  |  {nb} contrat(s)",
+                fg="#1565C0")
 
     @staticmethod
     def _trouver_racine_annee(dossier: str) -> tuple[str, str] | None:
