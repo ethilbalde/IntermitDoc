@@ -925,7 +925,7 @@ class DialogueParametres(tk.Toplevel):
         tk.Label(self, text="Abattement net (onglet Revenus) :").grid(
             row=6, column=0, sticky="w", **pad)
         self.var_taux_net = tk.StringVar(
-            value=str(self.cfg.get("taux_abattement_net", 10.0)))
+            value=str(self.cfg.get("taux_abattement_net", 23.0)))
         frame_taux = tk.Frame(self)
         frame_taux.grid(row=6, column=1, sticky="w", **pad)
         tk.Entry(frame_taux, textvariable=self.var_taux_net, width=6).pack(side=tk.LEFT)
@@ -5284,7 +5284,7 @@ class OngletRevenus(tk.Frame):
         bar2 = tk.Frame(self, padx=10)
         bar2.pack(fill=tk.X)
         tk.Label(bar2, text="Taux d'abattement estimé (brut → net) :").pack(side=tk.LEFT)
-        self.var_taux = tk.StringVar(value=str(self._cfg_getter().get("taux_abattement_net", 10.0)))
+        self.var_taux = tk.StringVar(value=str(self._cfg_getter().get("taux_abattement_net", 23.0)))
         tk.Entry(bar2, textvariable=self.var_taux, width=6).pack(side=tk.LEFT, padx=(4, 4))
         tk.Label(bar2, text="%").pack(side=tk.LEFT)
         tk.Button(bar2, text="Appliquer", command=self._appliquer_taux,
@@ -5504,7 +5504,7 @@ class OngletRevenus(tk.Frame):
         try:
             return float(self.var_taux.get().replace(",", "."))
         except ValueError:
-            return 10.0
+            return 23.0
 
     def _appliquer_taux(self):
         taux = self._taux_actuel()
@@ -5515,7 +5515,8 @@ class OngletRevenus(tk.Frame):
         self._on_select_periode()
 
     def _maj_detail(self, periode):
-        if periode and periode in self._stats_par_periode:
+        est_global = not (periode and periode in self._stats_par_periode)
+        if not est_global:
             s = self._stats_par_periode[periode]
             self._lbl_titre_detail.config(text=f"Détail — {periode}")
         elif self._stats_par_periode:
@@ -5551,16 +5552,24 @@ class OngletRevenus(tk.Frame):
         self._lbl_net.config(
             text=f"Estimation nette ({taux:.0f}% d'abattement) : {net:.0f} €")
 
-        depasse = s["brut_total"] > SEUIL_SALAIRE_RENTABLE
-        if depasse:
+        if est_global:
+            # Le seuil de 14 400€ s'apprécie période ARE par période ARE, pas sur un
+            # cumul de plusieurs années — voir le tableau, ou sélectionner une période.
             self._lbl_seuil.config(
-                text=f"⚠ Dépasse le seuil de 14 400€ (+{s['brut_total']-SEUIL_SALAIRE_RENTABLE:.0f} €) "
-                     "— plus rentable de déclarer en intermittent",
-                fg="#C62828")
+                text="ℹ Le seuil de 14 400€ s'apprécie période par période — "
+                     "sélectionnez une ligne du tableau pour voir son statut.",
+                fg="#555")
         else:
-            self._lbl_seuil.config(
-                text=f"✓ Sous le seuil de 14 400€ ({SEUIL_SALAIRE_RENTABLE - s['brut_total']:.0f} € de marge)",
-                fg="#2E7D32")
+            depasse = s["brut_total"] > SEUIL_SALAIRE_RENTABLE
+            if depasse:
+                self._lbl_seuil.config(
+                    text=f"⚠ Dépasse le seuil de 14 400€ (+{s['brut_total']-SEUIL_SALAIRE_RENTABLE:.0f} €) "
+                         "— plus rentable de déclarer en intermittent",
+                    fg="#C62828")
+            else:
+                self._lbl_seuil.config(
+                    text=f"✓ Sous le seuil de 14 400€ ({SEUIL_SALAIRE_RENTABLE - s['brut_total']:.0f} € de marge)",
+                    fg="#2E7D32")
 
         self._dessiner_repartition_employeur(s["employeurs"])
         self._dessiner_repartition_type(s["types"])
