@@ -19,15 +19,17 @@ tout :
 - **Suit** votre progression vers le seuil des 507 h qui ouvre vos droits
 - **Estime** votre allocation journalière (ARE) avec les vraies formules France Travail
 - **Anticipe** grâce aux contrats prévisionnels : voyez où vous en serez après vos
-  prochains cachets
+  prochains cachets, importables automatiquement depuis votre agenda Google
+- **Alerte** quand votre revenu dépasse le seuil où déclarer en intermittent n'est plus
+  rentable
 
 Tout se passe sur votre ordinateur. Vos données ne sont jamais partagées.
 
 ---
 
-## Comment ça marche — les 7 onglets
+## Comment ça marche — les 8 onglets
 
-### 1. Analyse
+### 1. Analyser & Classer
 Le cœur du programme. Déposez un ou plusieurs PDF (ou un dossier entier) : le programme
 lit le texte, identifie le type de document, l'employeur, la période, les heures et le
 salaire brut. Pour les AEM, une seconde analyse cible précisément les libellés officiels
@@ -35,35 +37,49 @@ Unedic (« Nombre d'HEURES effectuées », « salaire brut soumis à la contribu
 d'assurance chômage »). Chaque document déjà traité est reconnu — pas de doublon possible.
 Vous vérifiez, corrigez si besoin, puis classez d'un clic.
 
-### 2. Employeurs
-Votre carnet d'employeurs. Les noms enregistrés ici sont reconnus **directement dans le
-texte des documents** — détection instantanée et fiable pour vos employeurs habituels.
-Fusion des doublons intégrée (« LR GROUP » / « Lr Group »).
-
-### 3. Calcul AEM
-Calculatrice heures / cachets / salaire pour préparer une attestation.
-
-### 4. Suivi Intermittent
+### 2. Suivi Intermittent
 Votre tableau de bord ARE :
 - **Période automatique** calculée depuis votre date anniversaire
 - **Jauge 507 h** : vos heures réelles + prévisionnelles vers le seuil de renouvellement
 - **Indicateurs** : heures travaillées, heures manquantes, salaire brut, SJR, allocation
   journalière estimée, nombre de documents — chaque tuile affiche la valeur réelle **et**
   la projection avec vos contrats prévisionnels (⏳)
+- **Alerte seuil de rentabilité** : au-delà de 14 400 € brut (réel + prévisionnel) sur la
+  période, le programme signale qu'il n'est plus rentable de déclarer en intermittent
 - **Calculer ARE & Congés Spectacle** : détail complet de l'estimation
 
-### 5. Récapitulatif
-Vue d'ensemble par période anniversaire : toutes vos années côte à côte (heures, salaire,
-contrats, employeurs, droits ouverts ou non) + tableau détaillé de tous les contrats.
+### 3. Historique & Contrats futurs
+Navigation mois par mois dans vos contrats. Double-clic : aperçu du PDF. Clic droit :
+ouvrir, dupliquer vers d'autres dates (calendrier), modifier, supprimer (sélection
+multiple possible). Bouton **+ Contrat Futur** pour saisir un engagement à venir, et
+**📅 Agenda...** pour importer automatiquement vos prévisionnels depuis un agenda Google
+(lien ICS, sans OAuth) via une table de correspondance mot-clé du titre → employeur/type
+entièrement personnalisable.
+
+### 4. Bilan par période
+Vue d'ensemble par période anniversaire ARE : toutes vos périodes côte à côte (heures,
+salaire, contrats, employeurs, droits ouverts ou non) + tableau détaillé de tous les
+contrats, filtrable par type de document, avec alerte sur les bulletins de paie sans AEM
+correspondante.
+
+### 5. Revenus
+Vue transversale toutes périodes ARE confondues : graphique d'évolution du salaire brut
+(réel + prévisionnel, avec % d'évolution d'une période sur l'autre), tableau par période,
+répartition par employeur et par type de document, revenu mensuel moyen, estimation nette
+(taux d'abattement personnalisable), historique du seuil de rentabilité, export CSV.
 
 ### 6. Scan & Déplacement
 Scanne un dossier plein de PDF en vrac et propose un classement en masse, avec
 prévisualisation et confirmation avant tout déplacement.
 
-### 7. Historique
-Navigation mois par mois dans vos contrats. Double-clic : aperçu du PDF. Clic droit :
-ouvrir, dupliquer vers d'autres dates (calendrier), modifier, supprimer. Bouton
-**+ Contrat Futur** pour saisir un engagement à venir.
+### 7. Calculatrice AEM/ARE
+Calculatrice heures / cachets / salaire pour préparer une attestation, et estimation de
+l'allocation ARE.
+
+### 8. Employeurs
+Votre carnet d'employeurs. Les noms enregistrés ici sont reconnus **directement dans le
+texte des documents** — détection instantanée et fiable pour vos employeurs habituels.
+Fusion des doublons intégrée (« LR GROUP » / « Lr Group »).
 
 ---
 
@@ -250,10 +266,11 @@ dernier installeur depuis la page des [releases GitHub](https://github.com/ethil
 | Fichier | Rôle |
 |---|---|
 | `main.py` | point d'entrée |
-| `ui.py` | interface Tkinter (7 onglets) |
+| `ui.py` | interface Tkinter (8 onglets) |
 | `extractor.py` | extraction texte PDF (PyMuPDF) |
 | `analyzer.py` | analyse IA (Claude par défaut ; OpenAI / Gemini / Mistral en option) |
 | `classifier.py` | renommage + copie vers l'arborescence |
 | `config.py` | configuration, logs, registre des fichiers traités |
 | `previsionnel.py` | contrats prévisionnels + dédoublonnage |
+| `agenda.py` | import de prévisionnels depuis un agenda Google (lien ICS) |
 | `updater.py` | mise à jour automatique via GitHub Releases |
