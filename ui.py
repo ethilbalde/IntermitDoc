@@ -1419,6 +1419,37 @@ def _scanner_tous_docs(dossier_base: str) -> list:
 # considère que déclarer en intermittent n'est plus rentable pour lui.
 SEUIL_SALAIRE_RENTABLE = 14400
 
+# Simulation "et si j'avais facturé en auto-entreprise ?" appliquée au surplus
+# brut au-delà de SEUIL_SALAIRE_RENTABLE (onglet Revenus) :
+#   1. net salarié réel du surplus = surplus_brut x (1 - taux_abattement_net)
+#   2. coût réel employeur = net salarié x 2 (règle empirique : charges patronales
+#      + salariales cumulées ≈ le net versé pour un cachet intermittent)
+#   3. facture proposée = coût réel employeur x (1 - REMISE_FACTURE), pour que
+#      l'employeur y gagne par rapport à l'embauche en salarié
+#   4. cotisations sociales auto-entrepreneur (régime BNC, prestations libérales)
+#      déduites de la facture
+#   5. CFE annuelle forfaitaire déduite une fois (pas par contrat)
+REMISE_FACTURE_AE   = 0.10    # remise consentie à l'employeur vs coût salarié
+TAUX_COTISATIONS_BNC = 0.231  # cotisations sociales micro-entreprise BNC
+CFE_ANNUELLE_AE      = 300    # Cotisation Foncière des Entreprises, forfait annuel
+
+
+def _simuler_facture_ae(surplus_brut: float, taux_abattement: float) -> dict:
+    """Simule le net théorique si le surplus brut avait été facturé en
+    auto-entreprise (BNC) plutôt que déclaré en salarié intermittent."""
+    net_salarie = surplus_brut * (1 - taux_abattement / 100)
+    cout_employeur = net_salarie * 2
+    facture = cout_employeur * (1 - REMISE_FACTURE_AE)
+    cotisations = facture * TAUX_COTISATIONS_BNC
+    net_ae = facture - cotisations - CFE_ANNUELLE_AE
+    return {
+        "net_salarie": net_salarie,
+        "cout_employeur": cout_employeur,
+        "facture": facture,
+        "cotisations": cotisations,
+        "net_ae": net_ae,
+    }
+
 
 def _calculer_stats(docs: list, date_debut_str: str, date_fin_str: str,
                     annexe: str = "8") -> dict:
@@ -5327,7 +5358,10 @@ class OngletRevenus(tk.Frame):
         self._lbl_net = tk.Label(frame_detail, text="", font=("", 9), fg="#333")
         self._lbl_net.pack(anchor="w")
         self._lbl_seuil = tk.Label(frame_detail, text="", font=("", 9, "bold"))
-        self._lbl_seuil.pack(anchor="w", pady=(0, 8))
+        self._lbl_seuil.pack(anchor="w")
+        self._lbl_facture = tk.Label(frame_detail, text="", font=("", 8), fg="#555",
+                                     justify=tk.LEFT, wraplength=300)
+        self._lbl_facture.pack(anchor="w", pady=(2, 8))
 
         tk.Label(frame_detail, text="Répartition par employeur",
                  font=("", 9, "bold"), fg="#555").pack(anchor="w")
@@ -5559,17 +5593,30 @@ class OngletRevenus(tk.Frame):
                 text="ℹ Le seuil de 14 400€ s'apprécie période par période — "
                      "sélectionnez une ligne du tableau pour voir son statut.",
                 fg="#555")
+            self._lbl_facture.config(text="")
         else:
             depasse = s["brut_total"] > SEUIL_SALAIRE_RENTABLE
             if depasse:
+                surplus = s["brut_total"] - SEUIL_SALAIRE_RENTABLE
                 self._lbl_seuil.config(
-                    text=f"⚠ Dépasse le seuil de 14 400€ (+{s['brut_total']-SEUIL_SALAIRE_RENTABLE:.0f} €) "
+                    text=f"⚠ Dépasse le seuil de 14 400€ (+{surplus:.0f} €) "
                          "— plus rentable de déclarer en intermittent",
                     fg="#C62828")
+                sim = _simuler_facture_ae(surplus, taux)
+                self._lbl_facture.config(
+                    text=f"Si le surplus ({surplus:.0f} € brut) avait été facturé en "
+                         f"auto-entreprise : net réel salarié {sim['net_salarie']:.0f} € "
+                         f"→ facture proposée {sim['facture']:.0f} € (coût employeur "
+                         f"{sim['cout_employeur']:.0f} €, -{REMISE_FACTURE_AE*100:.0f}%) "
+                         f"− cotisations BNC {sim['cotisations']:.0f} € − CFE "
+                         f"{CFE_ANNUELLE_AE:.0f} € = net auto-entreprise "
+                         f"{sim['net_ae']:.0f} € (vs {sim['net_salarie']:.0f} € net "
+                         "réellement touché en salarié).")
             else:
                 self._lbl_seuil.config(
                     text=f"✓ Sous le seuil de 14 400€ ({SEUIL_SALAIRE_RENTABLE - s['brut_total']:.0f} € de marge)",
                     fg="#2E7D32")
+                self._lbl_facture.config(text="")
 
         self._dessiner_repartition_employeur(s["employeurs"])
         self._dessiner_repartition_type(s["types"])
@@ -5601,8 +5648,11 @@ class OngletRevenus(tk.Frame):
         c.update_idletasks()
         W = c.winfo_width() or 280
         if not types:
+            c.config(height=30)
             c.create_text(W // 2, 20, text="Aucun document", fill="#999", font=("", 8))
             return
+        hauteur_necessaire = 4 + 26 * len(types)
+        c.config(height=hauteur_necessaire)
         total = sum(types.values()) or 1
         couleurs = {"AEM": "#1565C0", "BP": "#2E7D32", "CS": "#F9A825",
                    "CT": "#F9A825", "STC": "#AD1457"}
