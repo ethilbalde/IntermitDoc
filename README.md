@@ -27,7 +27,7 @@ Tout se passe sur votre ordinateur. Vos données ne sont jamais partagées.
 
 ---
 
-## Comment ça marche — les 7 onglets
+## Comment ça marche — les 8 onglets
 
 ### 1. Analyser & Classer
 Le cœur du programme. Déposez un ou plusieurs PDF (ou un dossier entier) : le programme
@@ -56,7 +56,12 @@ multiple possible). Bouton **+ Contrat Futur** pour saisir un engagement à veni
 (lien ICS, sans OAuth) via une table de correspondance mot-clé du titre → employeur/type
 entièrement personnalisable.
 
-### 4. Bilan par période
+### 4. Documents
+Parcourez d'un coup d'œil **tous les documents d'un mois** (AEM, bulletins de paie, CS, CT,
+STC) : navigation année/mois, filtre par type, aperçu PDF intégré à droite (pages, plein
+écran, ouverture dans votre lecteur, accès au dossier du mois).
+
+### 4b. Bilan par période
 Vue d'ensemble par période anniversaire ARE : toutes vos périodes côte à côte (heures,
 salaire, contrats, employeurs, droits ouverts ou non) + tableau détaillé de tous les
 contrats, filtrable par type de document, avec alerte sur les bulletins de paie sans AEM
@@ -262,7 +267,7 @@ dernier installeur depuis la page des [releases GitHub](https://github.com/ethil
 | Fichier | Rôle |
 |---|---|
 | `main.py` | point d'entrée |
-| `ui.py` | interface Tkinter (7 onglets) |
+| `ui.py` | interface Tkinter (8 onglets) |
 | `extractor.py` | extraction texte PDF (PyMuPDF) |
 | `analyzer.py` | analyse IA (Claude par défaut ; OpenAI / Gemini / Mistral en option) |
 | `classifier.py` | renommage + copie vers l'arborescence |

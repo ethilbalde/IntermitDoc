@@ -14,7 +14,7 @@ Application Python/Tkinter de classification de PDF pour intermittents du specta
 ## Architecture
 
 - `main.py` — point d'entrée
-- `ui.py` — interface Tkinter (7 onglets — voir section Onglets)
+- `ui.py` — interface Tkinter (8 onglets — voir section Onglets)
 - `classifier.py` — construction des noms de fichiers et copie vers la destination
 - `extractor.py` — extraction texte PDF via PyMuPDF (fitz)
 - `analyzer.py` — analyse IA via Claude API (claude-sonnet-4-6) + providers alternatifs (OpenAI, Gemini, Mistral)
@@ -29,7 +29,8 @@ Application Python/Tkinter de classification de PDF pour intermittents du specta
 1. **Analyser & Classer** — glisser-déposer PDF, analyse IA, classification
 2. **Suivi Intermittent** — `OngletSuivi` — suivi ARE, heures glissantes, alerte seuil 14 400€
 3. **Historique & Contrats futurs** — `OngletHistorique` — navigation année/mois, liste AEM, fiche éditable, contrats futurs, import agenda Google
-4. **Bilan par période** — `OngletRecap` — tableau tous documents + prévisionnels par période ARE
+4. **Documents** — `OngletDocuments` — tous les PDF d'un mois (tous types), filtre type, aperçu intégré
+4b. **Bilan par période** — `OngletRecap` — tableau tous documents + prévisionnels par période ARE
 5. **Revenus** — `OngletRevenus` — vue pluriannuelle (par période ARE), répartition employeur/type, export CSV
 6. **Scan & Déplacement** — `OngletScan` — scan dossier et déplacement en masse
 7. **Employeurs** — `OngletEmployeurs` — CRUD liste employeurs

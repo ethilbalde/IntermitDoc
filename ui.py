@@ -1424,23 +1424,29 @@ SEUIL_SALAIRE_RENTABLE = 14400
 #   1. net salarié réel du surplus = surplus_brut x (1 - taux_abattement_net)
 #   2. coût réel employeur = net salarié x 2 (règle empirique : charges patronales
 #      + salariales cumulées ≈ le net versé pour un cachet intermittent)
-#   3. facture proposée = coût réel employeur x (1 - REMISE_FACTURE), pour que
+#   3. facture proposée = coût réel employeur x (1 - remise_facture), pour que
 #      l'employeur y gagne par rapport à l'embauche en salarié
-#   4. cotisations sociales auto-entrepreneur (régime BNC, prestations libérales)
+#   4. cotisations sociales auto-entrepreneur (taux selon le type d'entreprise)
 #      déduites de la facture
 #   5. CFE annuelle forfaitaire déduite une fois (pas par contrat)
-REMISE_FACTURE_AE   = 0.10    # remise consentie à l'employeur vs coût salarié
-TAUX_COTISATIONS_BNC = 0.231  # cotisations sociales micro-entreprise BNC
-CFE_ANNUELLE_AE      = 300    # Cotisation Foncière des Entreprises, forfait annuel
+CFE_ANNUELLE_AE = 300  # Cotisation Foncière des Entreprises, forfait annuel
+
+# Taux de cotisations sociales micro-entrepreneur par catégorie d'activité (2026)
+TYPES_ENTREPRISE_AE = {
+    "vente":    ("Vente de marchandises (BIC)",           0.123),
+    "services": ("Prestations de services (BIC)",         0.212),
+    "bnc":      ("Activité libérale (BNC)",                0.231),
+}
 
 
-def _simuler_facture_ae(surplus_brut: float, taux_abattement: float) -> dict:
+def _simuler_facture_ae(surplus_brut: float, taux_abattement: float,
+                        remise_facture: float, taux_cotisations: float) -> dict:
     """Simule le net théorique si le surplus brut avait été facturé en
-    auto-entreprise (BNC) plutôt que déclaré en salarié intermittent."""
+    auto-entreprise plutôt que déclaré en salarié intermittent."""
     net_salarie = surplus_brut * (1 - taux_abattement / 100)
     cout_employeur = net_salarie * 2
-    facture = cout_employeur * (1 - REMISE_FACTURE_AE)
-    cotisations = facture * TAUX_COTISATIONS_BNC
+    facture = cout_employeur * (1 - remise_facture / 100)
+    cotisations = facture * taux_cotisations
     net_ae = facture - cotisations - CFE_ANNUELLE_AE
     return {
         "net_salarie": net_salarie,
@@ -5272,6 +5278,278 @@ class OngletRecap(tk.Frame):
 
 
 # ---------------------------------------------------------------------------
+# Onglet Documents — parcourir tous les documents d'un mois
+# ---------------------------------------------------------------------------
+class OngletDocuments(tk.Frame):
+    """Liste tous les PDF classés d'un mois (tous types) avec aperçu intégré."""
+
+    COL = [
+        ("type",      "Type",      55),
+        ("date",      "Date",      130),
+        ("employeur", "Employeur", 170),
+        ("fichier",   "Fichier",   300),
+    ]
+
+    def __init__(self, parent, cfg_getter):
+        super().__init__(parent)
+        self._cfg_getter = cfg_getter
+        self._annee_var = tk.StringVar()
+        self._mois_var = tk.StringVar()
+        self._type_var = tk.StringVar(value="Tous")
+        self._docs: list = []
+        self._iid_docs: dict = {}
+        self._chemin_courant = ""
+        self._nb_pages = 0
+        self._page = 0
+        self._photo = None
+        self._construire()
+        self._init_navigation()
+
+    # ── Construction UI ─────────────────────────────────────────────────────
+
+    def _construire(self):
+        nav = tk.Frame(self, pady=6, padx=10, relief=tk.RAISED, bd=1)
+        nav.pack(fill=tk.X)
+
+        tk.Button(nav, text="◀", width=3, command=lambda: self._naviguer(-1),
+                  font=("", 11, "bold")).pack(side=tk.LEFT, padx=(0, 4))
+        tk.Label(nav, text="Année :").pack(side=tk.LEFT)
+        self._cb_annee = ttk.Combobox(nav, textvariable=self._annee_var,
+                                      width=7, state="readonly")
+        self._cb_annee.pack(side=tk.LEFT, padx=(2, 10))
+        self._cb_annee.bind("<<ComboboxSelected>>", lambda e: self._actualiser())
+
+        tk.Label(nav, text="Mois :").pack(side=tk.LEFT)
+        self._cb_mois = ttk.Combobox(
+            nav, textvariable=self._mois_var, width=14, state="readonly",
+            values=[f"{m} {n}" for m, n in OngletHistorique.MOIS_LABELS])
+        self._cb_mois.pack(side=tk.LEFT, padx=(2, 4))
+        self._cb_mois.bind("<<ComboboxSelected>>", lambda e: self._actualiser())
+
+        tk.Button(nav, text="▶", width=3, command=lambda: self._naviguer(+1),
+                  font=("", 11, "bold")).pack(side=tk.LEFT, padx=(4, 16))
+
+        tk.Label(nav, text="Type :").pack(side=tk.LEFT)
+        cb_type = ttk.Combobox(nav, textvariable=self._type_var, width=8,
+                               state="readonly",
+                               values=["Tous", "AEM", "BP", "CS", "CT", "STC", "INCONNU"])
+        cb_type.pack(side=tk.LEFT, padx=(2, 10))
+        cb_type.bind("<<ComboboxSelected>>", lambda e: self._actualiser())
+
+        tk.Button(nav, text="🔄 Actualiser", command=self._actualiser,
+                  pady=2).pack(side=tk.LEFT, padx=4)
+        tk.Button(nav, text="📁 Ouvrir le dossier du mois",
+                  command=self._ouvrir_dossier_mois, pady=2).pack(side=tk.RIGHT, padx=4)
+
+        paned = tk.PanedWindow(self, orient=tk.HORIZONTAL, sashwidth=6,
+                               sashrelief=tk.RAISED)
+        paned.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+
+        frame_liste = tk.Frame(paned)
+        paned.add(frame_liste, minsize=360)
+        cols = [c[0] for c in self.COL]
+        self.tree = ttk.Treeview(frame_liste, columns=cols, show="headings",
+                                 selectmode="browse")
+        for cid, label, w in self.COL:
+            self.tree.heading(cid, text=label)
+            self.tree.column(cid, width=w, minwidth=40, anchor="w")
+        sb = tk.Scrollbar(frame_liste, orient=tk.VERTICAL, command=self.tree.yview)
+        self.tree.configure(yscrollcommand=sb.set)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.tree.pack(fill=tk.BOTH, expand=True)
+        self.tree.bind("<<TreeviewSelect>>", lambda e: self._on_select())
+        self.tree.bind("<Double-Button-1>", lambda e: self._ouvrir_apercu_plein())
+        self._tri = _installer_tri(self.tree, cols)
+
+        frame_prev = tk.Frame(paned)
+        paned.add(frame_prev, minsize=360)
+
+        barre = tk.Frame(frame_prev)
+        barre.pack(fill=tk.X, pady=(2, 2))
+        tk.Button(barre, text="◀", width=3,
+                  command=lambda: self._changer_page(-1)).pack(side=tk.LEFT, padx=2)
+        self._lbl_page = tk.Label(barre, text="", width=12)
+        self._lbl_page.pack(side=tk.LEFT)
+        tk.Button(barre, text="▶", width=3,
+                  command=lambda: self._changer_page(+1)).pack(side=tk.LEFT, padx=2)
+        tk.Button(barre, text="📄 Ouvrir", command=self._ouvrir_externe,
+                  pady=1).pack(side=tk.RIGHT, padx=2)
+        tk.Button(barre, text="🔍 Plein écran", command=self._ouvrir_apercu_plein,
+                  pady=1).pack(side=tk.RIGHT, padx=2)
+
+        self._canvas = tk.Canvas(frame_prev, bg="#555555", highlightthickness=0)
+        self._canvas.pack(fill=tk.BOTH, expand=True)
+        self._canvas.bind("<Configure>", lambda e: self._afficher_page())
+
+        self._lbl_pied = tk.Label(self, text="", font=("", 8), fg="#555")
+        self._lbl_pied.pack(pady=2)
+
+    # ── Navigation ──────────────────────────────────────────────────────────
+
+    def _init_navigation(self):
+        annees = self._lister_annees()
+        self._cb_annee["values"] = annees
+        if not annees:
+            return
+        courante = str(_date_today.today().year)
+        self._annee_var.set(courante if courante in annees else annees[-1])
+        self._mois_var.set(
+            f"{_date_today.today().month:02d} "
+            f"{OngletHistorique.MOIS_NOMS[f'{_date_today.today().month:02d}']}")
+
+    def _lister_annees(self) -> list:
+        base = Path(self._cfg_getter().get("dossier_base", ""))
+        if not base.is_dir():
+            return []
+        return sorted(d.name for d in base.iterdir()
+                      if d.is_dir() and re.fullmatch(r"\d{4}", d.name))
+
+    def _mois_num(self) -> str:
+        val = self._mois_var.get()
+        return val.split(" ")[0] if val else ""
+
+    def _naviguer(self, delta: int):
+        annee, mois = self._annee_var.get(), self._mois_num()
+        if not annee or mois not in OngletHistorique.MOIS_NUM:
+            return
+        idx = OngletHistorique.MOIS_NUM.index(mois) + delta
+        annee_n = int(annee)
+        if idx < 0:
+            idx, annee_n = 11, annee_n - 1
+        elif idx > 11:
+            idx, annee_n = 0, annee_n + 1
+        m = OngletHistorique.MOIS_NUM[idx]
+        valeurs = list(self._cb_annee["values"])
+        if str(annee_n) not in valeurs:
+            valeurs = sorted(valeurs + [str(annee_n)])
+            self._cb_annee["values"] = valeurs
+        self._annee_var.set(str(annee_n))
+        self._mois_var.set(f"{m} {OngletHistorique.MOIS_NOMS[m]}")
+        self._actualiser()
+
+    # ── Données ─────────────────────────────────────────────────────────────
+
+    def _dossier_mois(self) -> Path | None:
+        base = self._cfg_getter().get("dossier_base", "")
+        annee, mois = self._annee_var.get(), self._mois_num()
+        nom_mois = MOIS_DOSSIERS.get(mois, "")
+        if not base or not annee or not nom_mois:
+            return None
+        return Path(base) / annee / nom_mois
+
+    def actualiser(self):
+        self._cb_annee["values"] = self._lister_annees()
+        if not self._annee_var.get() and self._cb_annee["values"]:
+            self._init_navigation()
+        self._actualiser()
+
+    def _actualiser(self):
+        self.tree.delete(*self.tree.get_children())
+        self._iid_docs = {}
+        self._docs = []
+        self._vider_apercu()
+
+        dossier = self._dossier_mois()
+        if dossier is None or not dossier.is_dir():
+            self._lbl_pied.config(text="Aucun dossier pour ce mois.")
+            return
+
+        filtre = self._type_var.get()
+        for sous in sorted(p for p in dossier.iterdir() if p.is_dir()):
+            if filtre != "Tous" and sous.name.upper() != filtre:
+                continue
+            for pdf in sorted(sous.glob("*.pdf")):
+                info = _parser_nom_doc(pdf.name) or {}
+                dd, df = info.get("date_debut", ""), info.get("date_fin", "")
+                date_txt = f"{dd} → {df}" if df and df != dd else dd
+                self._docs.append({
+                    "chemin": str(pdf), "type": sous.name.upper(),
+                    "date": date_txt, "employeur": info.get("employeur", ""),
+                    "fichier": pdf.name,
+                })
+        self._docs.sort(key=lambda d: (d["date"], d["type"], d["fichier"]))
+        for d in self._docs:
+            iid = self.tree.insert("", tk.END, values=(
+                d["type"], d["date"], d["employeur"], d["fichier"]))
+            self._iid_docs[iid] = d
+        self._lbl_pied.config(text=f"{len(self._docs)} document(s)")
+
+    # ── Aperçu ──────────────────────────────────────────────────────────────
+
+    def _doc_selectionne(self):
+        sel = self.tree.selection()
+        return self._iid_docs.get(sel[0]) if sel else None
+
+    def _vider_apercu(self):
+        self._chemin_courant = ""
+        self._nb_pages = 0
+        self._page = 0
+        self._photo = None
+        self._canvas.delete("all")
+        self._lbl_page.config(text="")
+
+    def _on_select(self):
+        doc = self._doc_selectionne()
+        if not doc:
+            return
+        self._chemin_courant = doc["chemin"]
+        self._page = 0
+        try:
+            import fitz
+            with fitz.open(self._chemin_courant) as pdf:
+                self._nb_pages = len(pdf)
+        except Exception:
+            self._nb_pages = 0
+        self._afficher_page()
+
+    def _changer_page(self, delta: int):
+        if not self._nb_pages:
+            return
+        self._page = max(0, min(self._nb_pages - 1, self._page + delta))
+        self._afficher_page()
+
+    def _afficher_page(self):
+        self._canvas.delete("all")
+        if not self._chemin_courant or not self._nb_pages:
+            return
+        cw = self._canvas.winfo_width()
+        if cw < 50:
+            return
+        try:
+            import fitz
+            with fitz.open(self._chemin_courant) as pdf:
+                page = pdf[self._page]
+                zoom = max(0.3, (cw - 10) / page.rect.width)
+                pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
+                img = Image.open(io.BytesIO(pix.tobytes("png")))
+        except Exception as e:
+            self._canvas.create_text(10, 10, anchor="nw",
+                                     text=f"Erreur aperçu : {e}", fill="white")
+            return
+        self._photo = ImageTk.PhotoImage(img)
+        self._canvas.create_image(5, 5, anchor="nw", image=self._photo)
+        self._canvas.configure(scrollregion=(0, 0, img.width + 10, img.height + 10))
+        self._lbl_page.config(text=f"Page {self._page + 1} / {self._nb_pages}")
+
+    # ── Actions ─────────────────────────────────────────────────────────────
+
+    def _ouvrir_apercu_plein(self):
+        if self._chemin_courant and Path(self._chemin_courant).exists():
+            FenetreApercu(self, self._chemin_courant, self._page, titre="Document")
+
+    def _ouvrir_externe(self):
+        import os
+        if self._chemin_courant and Path(self._chemin_courant).exists():
+            os.startfile(self._chemin_courant)
+
+    def _ouvrir_dossier_mois(self):
+        import os
+        dossier = self._dossier_mois()
+        if dossier and dossier.is_dir():
+            os.startfile(str(dossier))
+
+
+# ---------------------------------------------------------------------------
 # Onglet Revenus — vue pluriannuelle
 # ---------------------------------------------------------------------------
 class OngletRevenus(tk.Frame):
@@ -5320,6 +5598,27 @@ class OngletRevenus(tk.Frame):
         tk.Label(bar2, text="%").pack(side=tk.LEFT)
         tk.Button(bar2, text="Appliquer", command=self._appliquer_taux,
                   padx=6, pady=1).pack(side=tk.LEFT, padx=8)
+
+        bar3 = tk.Frame(self, padx=10)
+        bar3.pack(fill=tk.X, pady=(2, 0))
+        tk.Label(bar3, text="Simulation facture — remise à l'employeur :").pack(side=tk.LEFT)
+        self.var_remise = tk.StringVar(
+            value=str(self._cfg_getter().get("remise_facture_ae", 10.0)))
+        tk.Entry(bar3, textvariable=self.var_remise, width=6).pack(side=tk.LEFT, padx=(4, 4))
+        tk.Label(bar3, text="%").pack(side=tk.LEFT)
+
+        tk.Label(bar3, text="   Type d'entreprise :").pack(side=tk.LEFT, padx=(12, 0))
+        self.var_type_ae = tk.StringVar()
+        type_actuel = self._cfg_getter().get("type_entreprise_ae", "services")
+        self._combo_type_ae = ttk.Combobox(
+            bar3, textvariable=self.var_type_ae, state="readonly", width=32,
+            values=[label for label, _ in TYPES_ENTREPRISE_AE.values()])
+        self._combo_type_ae.set(TYPES_ENTREPRISE_AE.get(
+            type_actuel, TYPES_ENTREPRISE_AE["services"])[0])
+        self._combo_type_ae.pack(side=tk.LEFT, padx=(4, 8))
+
+        tk.Button(bar3, text="Appliquer", command=self._appliquer_taux,
+                  padx=6, pady=1).pack(side=tk.LEFT)
 
         # ── Graphique pluriannuel ────────────────────────────────────────────
         self._canvas_graph = tk.Canvas(self, height=170, bg="white",
@@ -5540,10 +5839,28 @@ class OngletRevenus(tk.Frame):
         except ValueError:
             return 23.0
 
+    def _remise_actuelle(self) -> float:
+        try:
+            return float(self.var_remise.get().replace(",", "."))
+        except ValueError:
+            return 10.0
+
+    def _type_ae_actuel(self) -> tuple[str, float]:
+        """Retourne (cle, taux_cotisations) du type d'entreprise sélectionné."""
+        label_choisi = self._combo_type_ae.get()
+        for cle, (label, taux) in TYPES_ENTREPRISE_AE.items():
+            if label == label_choisi:
+                return cle, taux
+        return "services", TYPES_ENTREPRISE_AE["services"][1]
+
     def _appliquer_taux(self):
         taux = self._taux_actuel()
+        remise = self._remise_actuelle()
+        cle_type_ae, _ = self._type_ae_actuel()
         cfg = self._cfg_getter()
         cfg["taux_abattement_net"] = taux
+        cfg["remise_facture_ae"] = remise
+        cfg["type_entreprise_ae"] = cle_type_ae
         sauvegarder_config(cfg)
         self._maj_tableau_periodes()
         self._on_select_periode()
@@ -5602,16 +5919,20 @@ class OngletRevenus(tk.Frame):
                     text=f"⚠ Dépasse le seuil de 14 400€ (+{surplus:.0f} €) "
                          "— plus rentable de déclarer en intermittent",
                     fg="#C62828")
-                sim = _simuler_facture_ae(surplus, taux)
+                remise = self._remise_actuelle()
+                cle_type_ae, taux_cotisations = self._type_ae_actuel()
+                label_type_ae = TYPES_ENTREPRISE_AE[cle_type_ae][0]
+                sim = _simuler_facture_ae(surplus, taux, remise, taux_cotisations)
                 self._lbl_facture.config(
                     text=f"Si le surplus ({surplus:.0f} € brut) avait été facturé en "
-                         f"auto-entreprise : net réel salarié {sim['net_salarie']:.0f} € "
-                         f"→ facture proposée {sim['facture']:.0f} € (coût employeur "
-                         f"{sim['cout_employeur']:.0f} €, -{REMISE_FACTURE_AE*100:.0f}%) "
-                         f"− cotisations BNC {sim['cotisations']:.0f} € − CFE "
-                         f"{CFE_ANNUELLE_AE:.0f} € = net auto-entreprise "
-                         f"{sim['net_ae']:.0f} € (vs {sim['net_salarie']:.0f} € net "
-                         "réellement touché en salarié).")
+                         f"auto-entreprise ({label_type_ae}) : net réel salarié "
+                         f"{sim['net_salarie']:.0f} € → facture proposée "
+                         f"{sim['facture']:.0f} € (coût employeur "
+                         f"{sim['cout_employeur']:.0f} €, -{remise:.0f}%) "
+                         f"− cotisations {taux_cotisations*100:.1f}% "
+                         f"{sim['cotisations']:.0f} € − CFE {CFE_ANNUELLE_AE:.0f} € "
+                         f"= net auto-entreprise {sim['net_ae']:.0f} € "
+                         f"(vs {sim['net_salarie']:.0f} € net réellement touché en salarié).")
             else:
                 self._lbl_seuil.config(
                     text=f"✓ Sous le seuil de 14 400€ ({SEUIL_SALAIRE_RENTABLE - s['brut_total']:.0f} € de marge)",
@@ -6397,7 +6718,7 @@ class DialogueBienvenue(tk.Toplevel):
 
         # ── Dossier de base ──────────────────────────────────────────────────
         tk.Label(self, text="Dossier où seront classés vos documents",
-                 font=("", 12, "bold"), pady=(14, 6)).pack()
+                 font=("", 12, "bold")).pack(pady=(14, 6))
         frame_dossier = tk.Frame(self, padx=20)
         frame_dossier.pack(fill=tk.X)
         self._var_dossier = tk.StringVar()
@@ -6605,6 +6926,10 @@ class FenetrePrincipale(TkinterDnD.Tk if DND_DISPONIBLE else tk.Tk):
         self.tab_historique = OngletHistorique(self.notebook, cfg_getter=lambda: self.cfg)
         self.notebook.add(self.tab_historique, text="  Historique & Contrats futurs  ")
 
+        # ---- Tab 3b : Documents ----
+        self.tab_documents = OngletDocuments(self.notebook, cfg_getter=lambda: self.cfg)
+        self.notebook.add(self.tab_documents, text="  📄 Documents  ")
+
         # ---- Tab 4 : Récapitulatif ----
         self.tab_recap = OngletRecap(self.notebook, cfg_getter=lambda: self.cfg)
         self.notebook.add(self.tab_recap, text="  Bilan par période  ")
@@ -6639,6 +6964,8 @@ class FenetrePrincipale(TkinterDnD.Tk if DND_DISPONIBLE else tk.Tk):
             self.tab_recap.actualiser()
         elif onglet is self.tab_revenus:
             self.tab_revenus.actualiser()
+        elif onglet is self.tab_documents:
+            self.tab_documents.actualiser()
 
     def _construire_onglet_analyse(self, parent):
         # Zone de drop
